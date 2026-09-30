@@ -73,6 +73,7 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
 
     header = [col.strip().lower() for col in rows[0]]
     col_map = {}
+    status_indices = []
     for idx, col in enumerate(header):
         if "name" in col and "competitor" not in col_map:
             col_map["name"] = idx
@@ -80,13 +81,19 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
             col_map["wca_id"] = idx
         elif "country" in col or "citizen" in col or "nationality" in col:
             col_map["country"] = idx
-        elif "status" in col:
-            col_map["status"] = idx
         elif "role" in col or "role(s)" in col:
             col_map["role"] = idx
 
+        if "status" in col or "registration" in col or "competing" in col:
+            status_indices.append(idx)
+
     if "name" not in col_map and len(header) >= 1:
         col_map["name"] = 0
+
+    EXCLUDED_STATUSES = {
+        "d", "del", "deleted", "rejected", "cancelled", "canceled",
+        "withdrawn", "declined", "dropped", "false", "no", "0"
+    }
 
     parsed_competitors = []
     seq_index = 1
@@ -99,10 +106,15 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
         if not raw_name:
             continue
 
-        if "status" in col_map and col_map["status"] < len(row):
-            status = row[col_map["status"]].strip().lower()
-            if status in ["rejected", "deleted", "cancelled"]:
-                continue
+        is_cancelled = False
+        for s_idx in status_indices:
+            if s_idx < len(row):
+                st_val = row[s_idx].strip().lower()
+                if st_val in EXCLUDED_STATUSES:
+                    is_cancelled = True
+                    break
+        if is_cancelled:
+            continue
 
         latin, local = parse_wca_name(raw_name)
 

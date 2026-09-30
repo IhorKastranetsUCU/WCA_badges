@@ -39,6 +39,28 @@ export function parseClientCsv(csvText: string): Competitor[] {
   const wcaIdIdx = header.findIndex((h) => h.includes("wca"));
   const countryIdx = header.findIndex((h) => h.includes("country") || h.includes("citizen"));
 
+  const statusIndices: number[] = [];
+  header.forEach((h, idx) => {
+    if (h.includes("status") || h.includes("competing") || h.includes("registration")) {
+      statusIndices.push(idx);
+    }
+  });
+
+  const EXCLUDED_STATUSES = new Set([
+    "d",
+    "del",
+    "deleted",
+    "rejected",
+    "cancelled",
+    "canceled",
+    "withdrawn",
+    "declined",
+    "dropped",
+    "false",
+    "no",
+    "0",
+  ]);
+
   const competitors: Competitor[] = [];
   let seq = 1;
 
@@ -59,6 +81,19 @@ export function parseClientCsv(csvText: string): Competitor[] {
       }
     }
     cols.push(entry.trim());
+
+    // Filter out cancelled, rejected, or deleted registrations
+    let isCancelled = false;
+    for (const sIdx of statusIndices) {
+      if (sIdx < cols.length) {
+        const val = cols[sIdx].trim().toLowerCase();
+        if (EXCLUDED_STATUSES.has(val)) {
+          isCancelled = true;
+          break;
+        }
+      }
+    }
+    if (isCancelled) continue;
 
     const rawName = cols[nameIdx] || "";
     if (!rawName) continue;

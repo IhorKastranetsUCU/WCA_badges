@@ -366,19 +366,19 @@ async def get_competition_registrations_categorized(
                     for p in wcif_data.get("persons", []):
                         reg = p.get("registration")
                         # Crucial: Only show people who actually registered to compete!
-                        # Non-competing Delegates, Organizers, and Staff have registration == None and must NOT be shown as competitors.
+                        # Non-competing Delegates, Organizers, and Staff have registration == None or isCompeting == False
                         if not reg or not isinstance(reg, dict):
                             continue
 
-                        # If explicitly marked as not competing and not on waiting list, skip
-                        if reg.get("isCompeting") is False and reg.get("status") not in ["pending", "waitlist", "waiting_list", "accepted", "approved"]:
+                        # If explicitly marked as not competing, they are not competing in events
+                        if reg.get("isCompeting") is False:
                             continue
 
                         st = str(reg.get("status", "accepted")).lower()
-                        if st in ["pending", "waitlist", "waiting_list"] or reg.get("is_waiting_list") or reg.get("waiting_list_position") is not None:
-                            st = "pending"
-                        elif st in ["deleted", "rejected", "cancelled"]:
+                        if reg.get("deleted_at") is not None or st in ["deleted", "rejected", "cancelled", "canceled", "declined", "withdrawn", "d"]:
                             st = "cancelled"
+                        elif st in ["pending", "waitlist", "waiting_list"] or reg.get("is_waiting_list") or reg.get("waiting_list_position") is not None:
+                            st = "pending"
                         else:
                             st = "accepted"
 

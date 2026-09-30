@@ -131,7 +131,10 @@ async def import_selected_registrations(
     """
     Imports user-selected registrations into the active badge generator list.
     """
-    selected_items = [item for item in payload.selected_registrations if item.selected]
+    selected_items = [
+        item for item in payload.selected_registrations
+        if item.selected and str(item.status).lower() not in ["cancelled", "deleted", "rejected", "canceled", "declined", "withdrawn", "d"]
+    ]
     if not selected_items:
         raise HTTPException(status_code=400, detail="No competitors were selected for import")
 

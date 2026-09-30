@@ -1,8 +1,62 @@
 import io
+import os
+import base64
+import logging
 from typing import Any, Dict, List
 from reportlab.lib.colors import HexColor
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import ImageReader
+
+logger = logging.getLogger(__name__)
+
+# Register Unicode TrueType fonts (DejaVuSans) if available
+FONT_REGULAR = "Helvetica"
+FONT_BOLD = "Helvetica-Bold"
+
+_FONTS_REGISTERED = False
+
+
+def _ensure_fonts_registered():
+    global FONT_REGULAR, FONT_BOLD, _FONTS_REGISTERED
+    if _FONTS_REGISTERED:
+        return
+
+    candidates_regular = [
+        os.path.join(os.path.dirname(__file__), "..", "fonts", "DejaVuSans.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+    ]
+    candidates_bold = [
+        os.path.join(os.path.dirname(__file__), "..", "fonts", "DejaVuSans-Bold.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    ]
+
+    reg_path = next((p for p in candidates_regular if os.path.exists(p)), None)
+    bold_path = next((p for p in candidates_bold if os.path.exists(p)), None)
+
+    if reg_path:
+        try:
+            pdfmetrics.registerFont(TTFont("DejaVuSans", reg_path))
+            FONT_REGULAR = "DejaVuSans"
+        except Exception as e:
+            logger.warning(f"Could not register DejaVuSans: {e}")
+
+    if bold_path:
+        try:
+            pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", bold_path))
+            FONT_BOLD = "DejaVuSans-Bold"
+        except Exception as e:
+            logger.warning(f"Could not register DejaVuSans-Bold: {e}")
+
+    _FONTS_REGISTERED = True
 
 
 def hex_to_color(hex_str: str, default: str = "#000000") -> HexColor:
@@ -67,6 +121,7 @@ def render_badges_pdf(
     sides_config: Dict[str, Any],
     side_to_export: str = "front",
 ) -> bytes:
+    _ensure_fonts_registered()
     width_mm = float(template_dimensions.get("width_mm", 100.0))
     height_mm = float(template_dimensions.get("height_mm", 70.0))
 
@@ -88,9 +143,21 @@ def render_badges_pdf(
             side_def = sides_config.get(current_side, {})
             elements = side_def.get("elements", [])
 
+            # Page background
             c.saveState()
             c.setFillColor(HexColor("#FFFFFF"))
             c.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+
+            # Optional uploaded background image
+            bg_url = side_def.get("background_url")
+            if bg_url and bg_url.startswith("data:image"):
+                try:
+                    _, b64data = bg_url.split(",", 1)
+                    img_bytes = base64.b64decode(b64data)
+                    img_reader = ImageReader(io.BytesIO(img_bytes))
+                    c.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
+                except Exception as e:
+                    logger.warning(f"Failed to draw background image: {e}")
             c.restoreState()
 
             sorted_elements = sorted(
@@ -101,7 +168,7 @@ def render_badges_pdf(
             for elem in sorted_elements:
                 elem_type = elem.get("type")
                 pos = elem.get("position", {})
-                style = elem.get("style", {})
+                style = elem.get("style", {}) or {}
 
                 x_mm = float(pos.get("x_mm", 0.0))
                 y_mm = float(pos.get("y_mm", 0.0))
@@ -117,35 +184,61 @@ def render_badges_pdf(
                 c.saveState()
                 c.setFillAlpha(opacity)
 
-                if style.get("has_background", False):
+                # Background styling (role or element has_background)
+                if elem_type == "role":
+                    bg_hex = role_style.get("background_color", "#2563EB")
+                    c.setFillColor(hex_to_color(bg_hex, "#2563EB"))
+                    radius_mm = float(role_style.get("border_radius", 4.0))
+                    radius_pt = min(radius_mm * mm * 0.5, min(pt_w, pt_h) / 2.0)
+                    if radius_pt > 0:
+                        c.roundRect(pt_x, pt_y, pt_w, pt_h, radius_pt, fill=1, stroke=0)
+                    else:
+                        c.rect(pt_x, pt_y, pt_w, pt_h, fill=1, stroke=0)
+                elif style.get("has_background", False):
                     bg_color = hex_to_color(style.get("background_color", "#FFFFFF"))
                     c.setFillColor(bg_color)
                     border_w = float(style.get("border_width", 0.0))
-                    if border_w > 0:
+                    radius_mm = float(style.get("border_radius", 0.0))
+                    radius_pt = min(radius_mm * mm * 0.5, min(pt_w, pt_h) / 2.0)
+
+                    has_stroke = border_w > 0
+                    if has_stroke:
                         c.setStrokeColor(hex_to_color(style.get("border_color", "#000000")))
                         c.setLineWidth(border_w)
-                        c.rect(pt_x, pt_y, pt_w, pt_h, fill=1, stroke=1)
-                    else:
-                        c.rect(pt_x, pt_y, pt_w, pt_h, fill=1, stroke=0)
 
+                    if radius_pt > 0:
+                        c.roundRect(pt_x, pt_y, pt_w, pt_h, radius_pt, fill=1, stroke=1 if has_stroke else 0)
+                    else:
+                        c.rect(pt_x, pt_y, pt_w, pt_h, fill=1, stroke=1 if has_stroke else 0)
+
+                # Flag element
                 if elem_type == "flag":
                     draw_flag_vector(c, comp.get("country_iso2", "UA"), pt_x, pt_y, pt_w, pt_h, opacity)
                     c.restoreState()
                     continue
 
+                # Text resolution
                 text_content = ""
-                font_weight = style.get("font_weight", "600")
-                font_size = float(style.get("font_size", 12))
-                text_color = hex_to_color(style.get("text_color", "#111827"))
+                font_weight = "600"
+                font_size = 14.0
+                text_color = HexColor("#111827")
+                align = "center"
 
                 if elem_type == "name":
                     display_mode = elem.get("name_display", "latin_only")
-                    if display_mode == "local_only" and comp.get("name_local"):
-                        text_content = comp.get("name_local", "")
-                    elif display_mode == "both" and comp.get("name_local"):
-                        text_content = f"{comp.get('name_latin', '')} ({comp.get('name_local', '')})"
+                    local_name = comp.get("name_local")
+                    latin_name = comp.get("name_latin") or "Participant"
+                    if display_mode == "local_only" and local_name:
+                        text_content = local_name
+                    elif display_mode == "both" and local_name:
+                        text_content = f"{latin_name} ({local_name})"
                     else:
-                        text_content = comp.get("name_latin", "")
+                        text_content = latin_name
+
+                    font_weight = style.get("font_weight", "700")
+                    font_size = float(style.get("font_size", 18))
+                    text_color = hex_to_color(style.get("text_color", "#111827"))
+                    align = style.get("text_align", "center")
 
                 elif elem_type == "wca_id":
                     raw_id = comp.get("wca_id") or "Newcomer"
@@ -159,6 +252,11 @@ def render_badges_pdf(
                     else:
                         text_content = raw_id
 
+                    font_weight = style.get("font_weight", "500")
+                    font_size = float(style.get("font_size", 13))
+                    text_color = hex_to_color(style.get("text_color", "#4B5563"))
+                    align = style.get("text_align", "center")
+
                 elif elem_type == "competition_id":
                     raw_idx = str(comp.get("csv_index", 1))
                     fmt = elem.get("format_mode", "raw")
@@ -171,38 +269,41 @@ def render_badges_pdf(
                     else:
                         text_content = raw_idx
 
+                    font_weight = style.get("font_weight", "500")
+                    font_size = float(style.get("font_size", 10))
+                    text_color = hex_to_color(style.get("text_color", "#9CA3AF"))
+                    align = style.get("text_align", "right")
+
                 elif elem_type == "role":
                     text_content = role_name
-                    if role_style:
-                        text_color = hex_to_color(role_style.get("text_color", "#FFFFFF"))
-                        role_bg = hex_to_color(role_style.get("background_color", "#2563EB"))
-                        c.setFillColor(role_bg)
-                        radius = float(role_style.get("border_radius", 4.0))
-                        c.roundRect(pt_x, pt_y, pt_w, pt_h, radius, fill=1, stroke=0)
+                    font_weight = role_style.get("font_weight", "600")
+                    font_size = float(role_style.get("font_size", 12))
+                    text_color = hex_to_color(role_style.get("text_color", "#FFFFFF"))
+                    align = role_style.get("text_align", "center")
 
                 if style.get("uppercase", False):
                     text_content = text_content.upper()
 
                 is_bold = font_weight in ["700", "800", "bold"]
-                is_italic = style.get("italic", False)
-                font_name = "Helvetica"
-                if is_bold and is_italic:
-                    font_name = "Helvetica-BoldOblique"
-                elif is_bold:
-                    font_name = "Helvetica-Bold"
-                elif is_italic:
-                    font_name = "Helvetica-Oblique"
+                font_name = FONT_BOLD if is_bold else FONT_REGULAR
 
                 c.setFont(font_name, font_size)
                 c.setFillColor(text_color)
 
-                align = style.get("text_align", "center")
-                text_y = pt_y + (pt_h / 2.0) - (font_size / 2.8)
+                pad_pt = 3.0
+                max_w = pt_w - (2 * pad_pt)
+                actual_w = c.stringWidth(text_content, font_name, font_size)
+                if actual_w > max_w and max_w > 0:
+                    font_size = max(6.0, font_size * (max_w / actual_w))
+                    c.setFont(font_name, font_size)
+
+                # Vertical center formula: box_center_y - 0.35 * font_size
+                text_y = pt_y + (pt_h / 2.0) - (font_size * 0.35)
 
                 if align == "left":
-                    c.drawString(pt_x + 4, text_y, text_content)
+                    c.drawString(pt_x + pad_pt, text_y, text_content)
                 elif align == "right":
-                    c.drawRightString(pt_x + pt_w - 4, text_y, text_content)
+                    c.drawRightString(pt_x + pt_w - pad_pt, text_y, text_content)
                 else:
                     c.drawCentredString(pt_x + (pt_w / 2.0), text_y, text_content)
 

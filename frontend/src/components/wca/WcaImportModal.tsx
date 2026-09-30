@@ -53,11 +53,12 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
       .then((res) => (res.ok ? res.json() : null))
       .then((data: WCARegistrationsCategorized) => {
         if (data) {
-          // Pre-select competitors by default
+          // Pre-select approved and pending competitors by default, cancelled stay unselected
           const withSelected = {
             ...data,
             pending: (data.pending || []).map((item) => ({ ...item, selected: true })),
             approved: (data.approved || []).map((item) => ({ ...item, selected: true })),
+            cancelled: (data.cancelled || []).map((item) => ({ ...item, selected: false })),
           };
           setCategorized(withSelected);
 
@@ -108,7 +109,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
   const approvedSelected = categorized?.approved.filter((r) => r.selected).length || 0;
   const pendingSelected = categorized?.pending.filter((r) => r.selected).length || 0;
   const cancelledSelected = categorized?.cancelled.filter((r) => r.selected).length || 0;
-  const totalSelected = approvedSelected + pendingSelected + cancelledSelected;
+  const totalSelected = approvedSelected + pendingSelected;
 
   const currentItems = categorized ? categorized[activeCategory] : [];
   const filteredItems = currentItems.filter((item) => {
@@ -129,10 +130,10 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
       selectedToImport = categorized.pending.filter((r) => r.selected);
       if (selectedToImport.length === 0) selectedToImport = categorized.pending;
     } else {
+      // Only import approved and pending, NEVER cancelled or rejected
       selectedToImport = [
-        ...categorized.pending,
         ...categorized.approved,
-        ...categorized.cancelled,
+        ...categorized.pending,
       ].filter((r) => r.selected);
     }
 

@@ -9,6 +9,7 @@ export async function exportBadges(
   roles: Role[],
   side: "front" | "back" | "both" = "front"
 ): Promise<void> {
+  // Try server-side ReportLab high-fidelity PDF export first
   try {
     const res = await fetch(getApiUrl("/api/badges/export-pdf"), {
       method: "POST",
@@ -19,6 +20,8 @@ export async function exportBadges(
           dimensions: template.dimensions,
           sides: template.sides,
         },
+        competitors,
+        roles,
       }),
     });
 
@@ -37,6 +40,7 @@ export async function exportBadges(
     console.warn("Backend PDF export unavailable, falling back to client-side jsPDF:", err);
   }
 
+  // Client-side fallback with jsPDF
   const { width_mm, height_mm } = template.dimensions;
   const orientation = width_mm > height_mm ? "landscape" : "portrait";
   const doc = new jsPDF({
@@ -51,7 +55,7 @@ export async function exportBadges(
   let firstPage = true;
 
   competitors.forEach((comp) => {
-    const compRole = comp.role_id ? rolesMap.get(comp.role_id) : undefined;
+    const compRole = comp.role_id ? rolesMap.get(comp.role_id) : roles[0];
     const roleName = compRole?.name || "Participant";
 
     sidesToExport.forEach((currentSide) => {
@@ -60,6 +64,7 @@ export async function exportBadges(
       }
       firstPage = false;
 
+      // Page background
       doc.setFillColor(255, 255, 255);
       doc.rect(0, 0, width_mm, height_mm, "F");
 
@@ -72,9 +77,19 @@ export async function exportBadges(
         const { x_mm, y_mm, width_mm: w, height_mm: h } = elem.position;
         const style = elem.style;
 
-        if (style?.has_background) {
+        if (elem.type === "role") {
+          const rStyle = compRole?.style;
+          doc.setFillColor(rStyle?.background_color || "#2563EB");
+          const radius = rStyle?.border_radius ? Math.min(rStyle.border_radius * 0.5, Math.min(w, h) / 2) : 2;
+          doc.roundedRect(x_mm, y_mm, w, h, radius, radius, "F");
+        } else if (style?.has_background) {
           doc.setFillColor(style.background_color || "#FFFFFF");
-          doc.rect(x_mm, y_mm, w, h, "F");
+          if (style.border_radius && style.border_radius > 0) {
+            const radius = Math.min(style.border_radius * 0.5, Math.min(w, h) / 2);
+            doc.roundedRect(x_mm, y_mm, w, h, radius, radius, "F");
+          } else {
+            doc.rect(x_mm, y_mm, w, h, "F");
+          }
         }
 
         let text = "";
@@ -106,27 +121,33 @@ export async function exportBadges(
           }
         } else if (elem.type === "role") {
           text = roleName;
-          if (compRole?.style) {
-            doc.setFillColor(compRole.style.background_color);
-            doc.roundedRect(x_mm, y_mm, w, h, 2, 2, "F");
-          }
         } else if (elem.type === "flag") {
-          doc.setFillColor(0, 87, 183);
-          doc.rect(x_mm, y_mm, w, h / 2, "F");
-          doc.setFillColor(255, 221, 0);
-          doc.rect(x_mm, y_mm + h / 2, w, h / 2, "F");
+          const iso = (comp.country_iso2 || "UA").toUpperCase();
+          if (iso === "UA") {
+            doc.setFillColor(0, 87, 183);
+            doc.rect(x_mm, y_mm, w, h / 2, "F");
+            doc.setFillColor(255, 221, 0);
+            doc.rect(x_mm, y_mm + h / 2, w, h / 2, "F");
+          } else {
+            doc.setFillColor(59, 130, 246);
+            doc.rect(x_mm, y_mm, w, h, "F");
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.text(iso, x_mm + w / 2, y_mm + h / 2 + 1, { align: "center" });
+          }
           return;
         }
 
-        if (style?.uppercase) {
+        const effectiveStyle = elem.type === "role" ? compRole?.style : style;
+        if (effectiveStyle && "uppercase" in effectiveStyle && effectiveStyle.uppercase) {
           text = text.toUpperCase();
         }
 
-        const fontSizePt = (style?.font_size || 12) * 0.75;
+        const fontSizePt = (effectiveStyle?.font_size || 12) * 0.75;
         doc.setFontSize(fontSizePt);
-        doc.setTextColor(style?.text_color || "#111827");
+        doc.setTextColor(effectiveStyle?.text_color || (elem.type === "role" ? "#FFFFFF" : "#111827"));
 
-        const align = style?.text_align || "center";
+        const align = effectiveStyle?.text_align || "center";
         const alignOption: "left" | "center" | "right" = align;
         const textX = align === "center" ? x_mm + w / 2 : align === "right" ? x_mm + w - 2 : x_mm + 2;
         const textY = y_mm + h / 2 + fontSizePt / 3.5;

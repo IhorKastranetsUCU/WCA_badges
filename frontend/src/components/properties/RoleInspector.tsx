@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Check, UserCheck, Shield } from "lucide-react";
+import { Plus, Check, UserCheck, Shield, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { Role, RoleStyle, Competitor } from "@/types/competitor";
 
 interface RoleInspectorProps {
@@ -168,6 +168,34 @@ export const RoleInspector: React.FC<RoleInspectorProps> = ({
               }
               className="w-full text-xs bg-white border border-slate-200 rounded p-1.5"
             />
+          </div>
+        </div>
+
+        {/* Text Alignment */}
+        <div>
+          <label className="text-[10px] text-slate-500 block mb-0.5">Text Alignment</label>
+          <div className="grid grid-cols-3 gap-1 bg-white p-1 rounded-lg border border-slate-200">
+            {(["left", "center", "right"] as const).map((align) => {
+              const isActive = (activeRole.style.text_align || "center") === align;
+              return (
+                <button
+                  key={align}
+                  type="button"
+                  onClick={() =>
+                    onUpdateRole(activeRole.id, {
+                      style: { ...activeRole.style, text_align: align },
+                    })
+                  }
+                  className={`py-1 flex items-center justify-center rounded transition-all cursor-pointer ${
+                    isActive ? "bg-blue-600 text-white shadow-sm font-semibold" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {align === "left" && <AlignLeft className="w-3.5 h-3.5" />}
+                  {align === "center" && <AlignCenter className="w-3.5 h-3.5" />}
+                  {align === "right" && <AlignRight className="w-3.5 h-3.5" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 

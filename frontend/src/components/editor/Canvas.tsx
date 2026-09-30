@@ -209,7 +209,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 contentText = currentCompetitor?.name_latin || "Participant Name";
               }
             } else if (elem.type === "wca_id") {
-              const raw = currentCompetitor?.wca_id || "2024EXAM01";
+              const raw = currentCompetitor?.wca_id || (currentCompetitor ? "Newcomer" : "2024EXAM01");
               if (elem.format_mode === "prefix_label") {
                 contentText = `WCA ID: ${raw}`;
               } else if (elem.format_mode === "custom") {
@@ -233,6 +233,17 @@ export const Canvas: React.FC<CanvasProps> = ({
             if (style?.uppercase) {
               contentText = contentText.toUpperCase();
             }
+
+            const textAlign =
+              elem.type === "role"
+                ? compRole?.style.text_align || "center"
+                : style?.text_align || "center";
+            const justifyClass =
+              textAlign === "left"
+                ? "justify-start text-left px-2"
+                : textAlign === "right"
+                ? "justify-end text-right px-2"
+                : "justify-center text-center px-1";
 
             return (
               <div
@@ -310,13 +321,10 @@ export const Canvas: React.FC<CanvasProps> = ({
                         elem.type === "role"
                           ? compRole?.style.text_color || "#FFFFFF"
                           : style?.text_color || "#111827",
-                      textAlign:
-                        elem.type === "role"
-                          ? compRole?.style.text_align || "center"
-                          : style?.text_align || "center",
+                      textAlign,
                       letterSpacing: style?.letter_spacing_mm ? `${style.letter_spacing_mm * scale}px` : undefined,
                     }}
-                    className="w-full h-full flex items-center justify-center truncate pointer-events-none select-none px-1"
+                    className={`w-full h-full flex items-center ${justifyClass} truncate pointer-events-none select-none`}
                   >
                     {contentText}
                   </div>

@@ -81,3 +81,5 @@ class ExportPDFRequest(BaseModel):
     template_id: Optional[str] = "current"
     side: Literal["front", "back", "both"] = "front"
     template_override: Optional[Dict[str, Any]] = None
+    competitors: Optional[List[Dict[str, Any]]] = None
+    roles: Optional[List[Dict[str, Any]]] = None

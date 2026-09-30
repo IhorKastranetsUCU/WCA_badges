@@ -6,13 +6,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies needed for compiling packages and ReportLab image processing
+# Install system dependencies needed for compiling packages, ReportLab image processing and Unicode fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     libjpeg-dev \
     zlib1g-dev \
     curl \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
