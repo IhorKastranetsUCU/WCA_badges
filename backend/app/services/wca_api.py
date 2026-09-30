@@ -99,14 +99,17 @@ SAMPLE_REGISTRATIONS: Dict[str, List[Dict[str, Any]]] = {
     "KyivSpring2026": [
         {"raw_name": "Ihor Shevchenko (Ігор Шевченко)", "wca_id": "2018SHEV01", "country": "Ukraine", "status": "accepted"},
         {"raw_name": "Oleksandr Mazur (Олександр Мазур)", "wca_id": "2019MAZU01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Max Park", "wca_id": "2012PARK03", "country": "United States", "status": "accepted"},
-        {"raw_name": "Tymon Kolasinski", "wca_id": "2016KOLA02", "country": "Poland", "status": "accepted"},
-        {"raw_name": "Yiheng Wang (王艺衡)", "wca_id": "2023WANG13", "country": "China", "status": "accepted"},
         {"raw_name": "Vladyslav Klymenko (Владислав Клименко)", "wca_id": "2021KLYM01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Mykhailo Moroz (Михайло Мороз)", "wca_id": "", "country": "Ukraine", "status": "accepted"},
+        {"raw_name": "Mykhailo Moroz (Михайло Мороз)", "wca_id": "2017MORO03", "country": "Ukraine", "status": "accepted"},
+        {"raw_name": "Andriy Bondarenko (Андрій Бондаренко)", "wca_id": "2019BOND02", "country": "Ukraine", "status": "accepted"},
+        # Waiting list / pending competitors
         {"raw_name": "Artem Zhuravsky (Артем Журавський)", "wca_id": "2022ZHUR01", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Bohdan Koval (Богдан Коваль)", "wca_id": "", "country": "Ukraine", "status": "pending"},
+        {"raw_name": "Bohdan Koval (Богдан Коваль)", "wca_id": "2023KOVA02", "country": "Ukraine", "status": "pending"},
         {"raw_name": "Sophia Miller", "wca_id": "2020MILL05", "country": "Germany", "status": "pending"},
+        {"raw_name": "Denys Melnyk (Денис Мельник)", "wca_id": "2024MELN01", "country": "Ukraine", "status": "pending"},
+        {"raw_name": "Yaroslav Boyko (Ярослав Бойко)", "wca_id": "", "country": "Ukraine", "status": "pending"},
+        {"raw_name": "Anna Tkachenko (Анна Ткаченко)", "wca_id": "2023TKAC01", "country": "Ukraine", "status": "pending"},
+        # Cancelled
         {"raw_name": "Dmytro Hordiyenko (Дмитро Гордієнко)", "wca_id": "2017HORD01", "country": "Ukraine", "status": "deleted"},
         {"raw_name": "Kamil Wisniewski", "wca_id": "2015WISN02", "country": "Poland", "status": "rejected"},
     ],
@@ -115,8 +118,14 @@ SAMPLE_REGISTRATIONS: Dict[str, List[Dict[str, Any]]] = {
         {"raw_name": "Artem Melikyan (Артем Мелікян)", "wca_id": "2014MELI01", "country": "Ukraine", "status": "accepted"},
         {"raw_name": "Lev Golub (Лев Голуб)", "wca_id": "2015GOLU01", "country": "Ukraine", "status": "accepted"},
         {"raw_name": "Roman Ostapenko (Роман Остапенко)", "wca_id": "2018OSTA02", "country": "Ukraine", "status": "accepted"},
+        # Waiting list / pending competitors
         {"raw_name": "Olena Bondar (Олена Бондар)", "wca_id": "2022BOND03", "country": "Ukraine", "status": "pending"},
         {"raw_name": "Taras Shevchenko (Тарас Шевченко)", "wca_id": "", "country": "Ukraine", "status": "pending"},
+        {"raw_name": "Sevastian Ostrovskyi (Севастіян Островський)", "wca_id": "2026OSTR02", "country": "Ukraine", "status": "pending"},
+        {"raw_name": "Maksym Uhryna (Максим Угрина)", "wca_id": "2026UHRY01", "country": "Ukraine", "status": "pending"},
+        {"raw_name": "Roman Shmygelskyi (Роман Шмигельський)", "wca_id": "2023KROM01", "country": "Ukraine", "status": "pending"},
+        {"raw_name": "Danylo Radzishevsky (Данило Радзішевський)", "wca_id": "2023RADZ02", "country": "Ukraine", "status": "pending"},
+        # Cancelled
         {"raw_name": "Denys Kravchenko (Денис Кравченко)", "wca_id": "2019KRAV01", "country": "Ukraine", "status": "deleted"},
     ],
     "PodillyaOpen2026": [
@@ -325,10 +334,12 @@ async def get_competition_registrations_categorized(
     comp_name = competition_id
     raw_records: List[Dict[str, Any]] = []
 
-    if token and not token.startswith("wca_demo_"):
-        try:
-            headers = {"Authorization": f"Bearer {token}"}
-            async with httpx.AsyncClient(timeout=8.0) as client:
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            headers = {"Authorization": f"Bearer {token}"} if (token and not token.startswith("wca_demo_")) else {}
+
+            # 1. If authenticated, try delegate/organizer registrations endpoint
+            if headers:
                 comp_res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}", headers=headers)
                 if comp_res.status_code == 200:
                     comp_info = comp_res.json()
@@ -345,8 +356,34 @@ async def get_competition_registrations_categorized(
                             "country": user.get("country_iso2", "UA"),
                             "status": r.get("status", "accepted"),
                         })
-        except Exception as e:
-            logger.warning(f"WCA API registrations fetch failed: {e}")
+
+            # 2. If empty, query WCIF endpoint (which contains real competitor entries and waitlists)
+            if not raw_records:
+                wcif_urls = []
+                if headers:
+                    wcif_urls.append((f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif", headers))
+                wcif_urls.append((f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif/public", {}))
+
+                for url, hdrs in wcif_urls:
+                    wcif_res = await client.get(url, headers=hdrs)
+                    if wcif_res.status_code == 200:
+                        wcif_data = wcif_res.json()
+                        comp_name = wcif_data.get("name", comp_name)
+                        for p in wcif_data.get("persons", []):
+                            reg = p.get("registration") or {}
+                            st = reg.get("status", "accepted") if reg else "accepted"
+                            if reg.get("is_waiting_list") or reg.get("waiting_list_position") is not None:
+                                st = "pending"
+                            raw_records.append({
+                                "raw_name": p.get("name", "Competitor"),
+                                "wca_id": p.get("wcaId"),
+                                "country": p.get("countryIso2", "UA"),
+                                "status": st,
+                            })
+                        if raw_records:
+                            break
+    except Exception as e:
+        logger.warning(f"WCA API registrations fetch failed: {e}")
 
     if not raw_records:
         source_data = SAMPLE_REGISTRATIONS.get(competition_id, SAMPLE_REGISTRATIONS["KyivSpring2026"])
@@ -366,6 +403,9 @@ async def get_competition_registrations_categorized(
         iso2, full_name = resolve_country_iso2(country_str)
         status = str(item.get("status", "accepted")).lower()
 
+        # Both accepted and waitlist (pending) are pre-selected so organizers can import either tab directly
+        is_selected = status in ["pending", "waitlist", "waiting_list", "accepted", "approved"]
+
         reg_item = WCARegistrationItem(
             id=f"wca-reg-{competition_id}-{idx}",
             user_id=idx,
@@ -376,7 +416,7 @@ async def get_competition_registrations_categorized(
             country_iso2=iso2,
             country_name=full_name,
             status=status,
-            selected=status == "accepted",
+            selected=is_selected,
             competition_id=competition_id,
         )
 

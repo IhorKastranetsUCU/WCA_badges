@@ -104,23 +104,34 @@ const INITIAL_COMPETITORS: Competitor[] = [
   {
     id: "c2",
     csv_index: 2,
-    name_latin: "Max Park",
-    name_local: null,
-    name_raw: "Max Park",
-    wca_id: "2012PARK03",
-    country_iso2: "US",
-    country_name: "United States",
+    name_latin: "Artem Zhuravsky",
+    name_local: "Артем Журавський",
+    name_raw: "Artem Zhuravsky (Артем Журавський)",
+    wca_id: "2022ZHUR01",
+    country_iso2: "UA",
+    country_name: "Ukraine",
     role_id: "r-participant",
   },
   {
     id: "c3",
     csv_index: 3,
-    name_latin: "Tymon Kolasinski",
+    name_latin: "Bohdan Koval",
+    name_local: "Богдан Коваль",
+    name_raw: "Bohdan Koval (Богдан Коваль)",
+    wca_id: "2023KOVA02",
+    country_iso2: "UA",
+    country_name: "Ukraine",
+    role_id: "r-participant",
+  },
+  {
+    id: "c4",
+    csv_index: 4,
+    name_latin: "Sophia Miller",
     name_local: null,
-    name_raw: "Tymon Kolasinski",
-    wca_id: "2016KOLA02",
-    country_iso2: "PL",
-    country_name: "Poland",
+    name_raw: "Sophia Miller",
+    wca_id: "2020MILL05",
+    country_iso2: "DE",
+    country_name: "Germany",
     role_id: "r-participant",
   },
 ];
@@ -707,6 +718,7 @@ export const App: React.FC = () => {
         onImportCompetitors={handleImportWcaCompetitors}
         competitions={wcaCompetitions}
         wcaProfile={wcaProfile}
+        wcaToken={wcaToken}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
       />
 

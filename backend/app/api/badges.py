@@ -75,11 +75,11 @@ async def export_badges_pdf(
             },
             {
                 "csv_index": 2,
-                "name_latin": "Max Park",
-                "name_local": None,
-                "wca_id": "2012PARK03",
-                "country_iso2": "US",
-                "country_name": "United States",
+                "name_latin": "Artem Zhuravsky",
+                "name_local": "Артем Журавський",
+                "wca_id": "2022ZHUR01",
+                "country_iso2": "UA",
+                "country_name": "Ukraine",
                 "role_id": "r-participant",
             },
         ]

@@ -11,6 +11,7 @@ interface WcaImportModalProps {
   onImportCompetitors: (imported: Competitor[]) => void;
   competitions: WCACompetition[];
   wcaProfile: WCAProfile | null;
+  wcaToken?: string | null;
   onOpenProfileModal: () => void;
 }
 
@@ -20,6 +21,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
   onImportCompetitors,
   competitions,
   wcaProfile,
+  wcaToken,
   onOpenProfileModal,
 }) => {
   const [selectedCompId, setSelectedCompId] = useState<string>("");
@@ -27,7 +29,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
   const [isLoadingRegs, setIsLoadingRegs] = useState<boolean>(false);
   const [categorized, setCategorized] = useState<WCARegistrationsCategorized | null>(null);
 
-  const [activeCategory, setActiveCategory] = useState<"approved" | "pending" | "cancelled">("approved");
+  const [activeCategory, setActiveCategory] = useState<"pending" | "approved" | "cancelled">("pending");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Initialize selected competition when modal opens or competitions change
@@ -42,14 +44,26 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
     if (!isOpen || !selectedCompId) return;
 
     setIsLoadingRegs(true);
-    fetch(getApiUrl(`/api/wca/competitions/${selectedCompId}/registrations`))
+    const headers: Record<string, string> = {};
+    if (wcaToken) {
+      headers["Authorization"] = `Bearer ${wcaToken}`;
+    }
+
+    fetch(getApiUrl(`/api/wca/competitions/${selectedCompId}/registrations`), { headers })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: WCARegistrationsCategorized) => {
-        if (data) setCategorized(data);
+        if (data) {
+          // Pre-select waiting list (pending) competitors by default
+          const withPendingSelected = {
+            ...data,
+            pending: (data.pending || []).map((item) => ({ ...item, selected: true })),
+          };
+          setCategorized(withPendingSelected);
+        }
       })
       .catch(() => {})
       .finally(() => setIsLoadingRegs(false));
-  }, [isOpen, selectedCompId]);
+  }, [isOpen, selectedCompId, wcaToken]);
 
   if (!isOpen) return null;
 
@@ -98,15 +112,22 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
     );
   });
 
-  const handleImport = async () => {
+  const handleImport = async (targetScope: "pending" | "all" = "all") => {
     if (!categorized) return;
-    const allSelected = [
-      ...categorized.approved,
-      ...categorized.pending,
-      ...categorized.cancelled,
-    ].filter((r) => r.selected);
+    let selectedToImport: WCARegistrationItem[] = [];
 
-    if (allSelected.length === 0) return;
+    if (targetScope === "pending") {
+      selectedToImport = categorized.pending.filter((r) => r.selected);
+      if (selectedToImport.length === 0) selectedToImport = categorized.pending;
+    } else {
+      selectedToImport = [
+        ...categorized.pending,
+        ...categorized.approved,
+        ...categorized.cancelled,
+      ].filter((r) => r.selected);
+    }
+
+    if (selectedToImport.length === 0) return;
 
     try {
       const res = await fetch(getApiUrl(`/api/wca/competitions/${selectedCompId}/import`), {
@@ -114,7 +135,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           competition_id: selectedCompId,
-          selected_registrations: allSelected,
+          selected_registrations: selectedToImport,
         }),
       });
 
@@ -128,7 +149,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
       // Fallback client-side
     }
 
-    const fallbackComps: Competitor[] = allSelected.map((reg, idx) => ({
+    const fallbackComps: Competitor[] = selectedToImport.map((reg, idx) => ({
       id: `wca-${idx + 1}`,
       csv_index: idx + 1,
       name_latin: reg.name_latin,
@@ -236,9 +257,25 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
           </form>
         </div>
 
-        {/* Category Tabs: Approved, Pending, Cancelled */}
+        {/* Category Tabs: Waiting List (Pending), Approved, Cancelled */}
         <div className="px-6 pt-3 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveCategory("pending")}
+              className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                activeCategory === "pending"
+                  ? "border-amber-600 text-amber-700 bg-white shadow-sm"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Waiting List (Pending)
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800 font-extrabold">
+                {pendingSelected} / {categorized?.pending.length || 0}
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => setActiveCategory("approved")}
@@ -252,22 +289,6 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
               Approved Registrations
               <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-extrabold">
                 {approvedSelected} / {categorized?.approved.length || 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveCategory("pending")}
-              className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-                activeCategory === "pending"
-                  ? "border-amber-600 text-amber-700 bg-white shadow-sm"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              Pending / Waitlist
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800 font-extrabold">
-                {pendingSelected} / {categorized?.pending.length || 0}
               </span>
             </button>
 
@@ -389,9 +410,14 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
 
         {/* Footer Actions */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/80 flex items-center justify-between">
-          <div className="text-xs text-slate-600">
-            Total Selected for Badges:{" "}
-            <span className="font-extrabold text-blue-600">{totalSelected}</span> participants
+          <div className="text-xs text-slate-600 flex items-center gap-2">
+            <span>
+              Total Selected: <span className="font-extrabold text-blue-600">{totalSelected}</span>
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-amber-700 font-medium">
+              Waiting List: <span className="font-bold">{pendingSelected}</span>
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -404,11 +430,19 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
             </button>
             <button
               type="button"
+              disabled={pendingSelected === 0}
+              onClick={() => handleImport("pending")}
+              className="px-4 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 active:bg-amber-600 disabled:opacity-40 rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Import Waiting List ({pendingSelected})</span>
+            </button>
+            <button
+              type="button"
               disabled={totalSelected === 0}
-              onClick={handleImport}
+              onClick={() => handleImport("all")}
               className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer"
             >
-              Import {totalSelected} Competitors to Badges
+              Import Selected ({totalSelected})
             </button>
           </div>
         </div>
