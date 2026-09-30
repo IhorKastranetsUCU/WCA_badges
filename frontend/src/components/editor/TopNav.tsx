@@ -1,6 +1,5 @@
 import React from "react";
-import { Download, Sparkles, User, Shield, LogIn, LogOut, CheckCircle2 } from "lucide-react";
-import { useAuth } from "react-oidc-context";
+import { Download, Sparkles, Shield, LogOut, ExternalLink, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { WCAProfile } from "@/types/wca";
 
 interface TopNavProps {
@@ -10,6 +9,9 @@ interface TopNavProps {
   isGenerating?: boolean;
   wcaProfile: WCAProfile | null;
   onOpenProfileModal: () => void;
+  onWcaLogin: () => void;
+  onWcaLogout: () => void;
+  isWcaAuthenticating?: boolean;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -19,24 +21,10 @@ export const TopNav: React.FC<TopNavProps> = ({
   isGenerating = false,
   wcaProfile,
   onOpenProfileModal,
+  onWcaLogin,
+  onWcaLogout,
+  isWcaAuthenticating = false,
 }) => {
-  const auth = useAuth();
-
-  const handleCognitoSignOut = () => {
-    auth.removeUser();
-    const cognitoDomain =
-      import.meta.env.VITE_COGNITO_DOMAIN ||
-      "https://wca-badges-297580066889.auth.us-east-1.amazoncognito.com";
-    const clientId =
-      import.meta.env.VITE_COGNITO_CLIENT_ID || "3eqs900kmd3koe333lg6jl4pl2";
-    const logoutUri = encodeURIComponent(`${window.location.origin}/`);
-    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${logoutUri}`;
-  };
-
-  const handleCognitoSignIn = () => {
-    auth.signinRedirect();
-  };
-
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm z-30 select-none">
       {/* Left: Title in blue letters */}
@@ -78,74 +66,75 @@ export const TopNav: React.FC<TopNavProps> = ({
         </button>
       </div>
 
-      {/* Right: Cognito user status + WCA Profile status + Generate Badges button */}
+      {/* Right: WCA Profile status + Generate Badges button */}
       <div className="flex items-center gap-3">
-        {/* Amazon Cognito Auth Status */}
-        {auth.isAuthenticated && auth.user ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 shadow-sm">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <div className="text-left">
-              <div className="text-[9px] uppercase font-bold text-emerald-700 tracking-wider">Signed in</div>
-              <div className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[160px]">
-                {auth.user.profile.email || auth.user.profile.preferred_username || "User"}
-              </div>
-            </div>
+        {wcaProfile ? (
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1 pr-2 shadow-sm">
             <button
               type="button"
-              onClick={handleCognitoSignOut}
-              title="Sign Out of Amazon Cognito"
-              className="ml-1 p-1 hover:bg-emerald-100 rounded-lg text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+              onClick={onOpenProfileModal}
+              title="Click to view WCA Profile details"
+              className="flex items-center gap-2.5 hover:bg-slate-100/80 p-1 rounded-lg transition-colors cursor-pointer text-left"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <img
+                src={wcaProfile.avatar_url || "https://avatars.githubusercontent.com/u/45145803?v=4"}
+                alt={wcaProfile.name}
+                className="w-7 h-7 rounded-full object-cover border border-slate-300"
+              />
+              <div>
+                <div className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[130px]">
+                  {wcaProfile.name}
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono leading-tight">
+                  {wcaProfile.wca_id || "WCA Member"}
+                </div>
+              </div>
+              {wcaProfile.is_delegate && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
+                  <Shield className="w-2.5 h-2.5" />
+                  Del
+                </span>
+              )}
+            </button>
+            <div className="h-4 w-px bg-slate-200"></div>
+            <button
+              type="button"
+              onClick={onWcaLogout}
+              title="Sign Out of WCA"
+              className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={handleCognitoSignIn}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-all cursor-pointer shadow-sm"
-          >
-            <LogIn className="w-3.5 h-3.5 text-blue-600" />
-            <span>Sign In</span>
-          </button>
-        )}
-
-        {/* WCA Profile Connector */}
-        {wcaProfile ? (
-          <button
-            type="button"
-            onClick={onOpenProfileModal}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-blue-50/50 transition-all cursor-pointer"
-          >
-            <img
-              src={wcaProfile.avatar_url || "https://avatars.githubusercontent.com/u/45145803?v=4"}
-              alt={wcaProfile.name}
-              className="w-7 h-7 rounded-full object-cover border border-slate-200"
-            />
-            <div className="text-left">
-              <div className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[120px]">
-                {wcaProfile.name}
-              </div>
-              <div className="text-[10px] text-slate-400 font-mono leading-tight">
-                {wcaProfile.wca_id || "Connected"}
-              </div>
-            </div>
-            {wcaProfile.is_delegate && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
-                <Shield className="w-2.5 h-2.5" />
-                Del
-              </span>
-            )}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onOpenProfileModal}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
-          >
-            <User className="w-4 h-4" />
-            <span>Connect WCA Profile</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onWcaLogin}
+              disabled={isWcaAuthenticating}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0057B7] hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold shadow-md shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-60"
+            >
+              {isWcaAuthenticating ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Signing In...</span>
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Sign In with WCA</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onOpenProfileModal}
+              title="More connection options (Demo / Personal Token)"
+              className="p-2 border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl transition-all cursor-pointer"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+            </button>
+          </div>
         )}
 
         <button

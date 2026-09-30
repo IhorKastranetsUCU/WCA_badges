@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "react-oidc-context";
+import { RefreshCw, AlertCircle, X } from "lucide-react";
 import { BadgeDimensions, BadgeElement, BadgeTemplate } from "@/types/badge";
 import { Competitor, Role, RoleStyle } from "@/types/competitor";
 import { WCAProfile, WCACompetition } from "@/types/wca";
@@ -12,6 +12,7 @@ import { WcaProfileModal } from "@/components/wca/WcaProfileModal";
 import { AddCustomAttendeeModal } from "@/components/wca/AddCustomAttendeeModal";
 import { parseClientCsv } from "@/utils/csvParser";
 import { exportBadges } from "@/utils/pdfExport";
+import { getApiUrl } from "@/api/config";
 
 const INITIAL_ROLES: Role[] = [
   {
@@ -246,65 +247,90 @@ export const App: React.FC = () => {
         return null;
       }
     }
-    // Default initial connected profile for seamless demo
-    return {
-      id: 18942,
-      wca_id: "2018SHEV01",
-      name: "Ihor Shevchenko",
-      avatar_url: "https://avatars.githubusercontent.com/u/45145803?v=4",
-      country_iso2: "UA",
-      delegate_status: "delegate",
-      is_delegate: true,
-      is_organizer: true,
-      email: "ishevchenko@worldcubeassociation.org",
-    };
+    return null;
   });
 
   const [wcaCompetitions, setWcaCompetitions] = useState<WCACompetition[]>([]);
   const [wcaToken, setWcaToken] = useState<string | null>(() => localStorage.getItem("wca_token"));
+  const [isWcaAuthenticating, setIsWcaAuthenticating] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Modals
   const [isWcaModalOpen, setIsWcaModalOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState<boolean>(false);
 
-  const auth = useAuth();
+  // Direct WCA OAuth login trigger
+  const handleWcaOAuthLogin = async () => {
+    try {
+      setIsWcaAuthenticating(true);
+      setAuthError(null);
+      const redirectUri = `${window.location.origin}/`;
+      sessionStorage.setItem("wca_oauth_redirect_uri", redirectUri);
+      const res = await fetch(getApiUrl(`/api/wca/oauth/url?redirect_uri=${encodeURIComponent(redirectUri)}`));
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authorization_url) {
+          window.location.href = data.authorization_url;
+          return;
+        }
+      }
+      throw new Error("Failed to generate WCA authorization URL");
+    } catch (e: any) {
+      console.error("WCA OAuth error:", e);
+      setAuthError(e.message || "Failed to start WCA login");
+      setIsWcaAuthenticating(false);
+    }
+  };
 
-  // Immediate redirect on /login/ route per lab specification
+  // Immediate redirect on /login/ route to WCA OAuth
   useEffect(() => {
     const path = window.location.pathname;
     if (path === "/login" || path === "/login/" || path.startsWith("/login")) {
-      auth.signinRedirect();
+      handleWcaOAuthLogin();
     }
-  }, [auth]);
+  }, []);
 
-  // Handle WCA OAuth callback URL (?code=... without OIDC state)
+  // Handle WCA OAuth callback URL (?code=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    const state = params.get("state");
-    // Only handle if code is present and NOT an OIDC state parameter
-    if (code && !state) {
+    if (code) {
+      setIsWcaAuthenticating(true);
+      setAuthError(null);
       window.history.replaceState({}, document.title, window.location.pathname);
       const redirect_uri = sessionStorage.getItem("wca_oauth_redirect_uri") || `${window.location.origin}/`;
-      fetch("/api/wca/oauth/callback", {
+      fetch(getApiUrl("/api/wca/oauth/callback"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, redirect_uri }),
       })
-        .then((res) => (res.ok ? res.json() : null))
+        .then(async (res) => {
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || "Authentication with WCA failed");
+          }
+          return res.json();
+        })
         .then((data) => {
-          if (data) {
-            handleLogin(data.access_token, data.profile, data.competitions);
+          if (data && data.profile) {
+            handleLogin(data.access_token, data.profile, data.competitions || []);
           }
         })
-        .catch(() => {});
+        .catch((err: any) => {
+          console.error("WCA OAuth callback error:", err);
+          setAuthError(err.message || "Failed to complete WCA authentication");
+        })
+        .finally(() => {
+          setIsWcaAuthenticating(false);
+        });
     }
   }, []);
 
   // Fetch competitions for active WCA profile
   useEffect(() => {
-    fetch("/api/wca/competitions", {
+    if (!wcaToken && !wcaProfile) return;
+    fetch(getApiUrl("/api/wca/competitions"), {
       headers: wcaToken ? { Authorization: `Bearer ${wcaToken}` } : {},
     })
       .then((res) => (res.ok ? res.json() : []))
@@ -332,14 +358,14 @@ export const App: React.FC = () => {
 
   // Sync with backend API on mount
   useEffect(() => {
-    fetch("/api/roles")
+    fetch(getApiUrl("/api/roles"))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && Array.isArray(data) && data.length > 0) setRoles(data);
       })
       .catch(() => {});
 
-    fetch("/api/competitors")
+    fetch(getApiUrl("/api/competitors"))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && Array.isArray(data) && data.length > 0) setCompetitors(data);
@@ -485,7 +511,7 @@ export const App: React.FC = () => {
 
     const formData = new FormData();
     formData.append("file", file);
-    fetch("/api/competitors/upload-csv", { method: "POST", body: formData })
+    fetch(getApiUrl("/api/competitors/upload-csv"), { method: "POST", body: formData })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.competitors?.length > 0) {
@@ -587,7 +613,34 @@ export const App: React.FC = () => {
         isGenerating={isGenerating}
         wcaProfile={wcaProfile}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        onWcaLogin={handleWcaOAuthLogin}
+        onWcaLogout={handleLogout}
+        isWcaAuthenticating={isWcaAuthenticating}
       />
+
+      {/* Auth notification banners */}
+      {isWcaAuthenticating && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#0057B7] text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 animate-fadeIn border border-blue-400">
+          <RefreshCw className="w-5 h-5 animate-spin" />
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-blue-200">World Cube Association</div>
+            <div className="text-sm font-semibold">Authenticating account & fetching competitions...</div>
+          </div>
+        </div>
+      )}
+
+      {authError && (
+        <div className="fixed bottom-6 right-6 z-50 bg-rose-600 text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 animate-fadeIn border border-rose-400">
+          <AlertCircle className="w-5 h-5 text-rose-200 flex-shrink-0" />
+          <div className="text-sm font-semibold">{authError}</div>
+          <button
+            onClick={() => setAuthError(null)}
+            className="p-1 hover:bg-rose-700 rounded-lg text-white transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Editor Section: 3 Containers (Left Panel, Canvas, Right Panel) */}
       <div className="flex-1 flex overflow-hidden">

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X, LogIn, LogOut, Shield, Key, Sparkles, Check, ExternalLink } from "lucide-react";
 import { WCAProfile, WCACompetition } from "@/types/wca";
+import { getApiUrl } from "@/api/config";
 
 interface WcaProfileModalProps {
   isOpen: boolean;
@@ -31,7 +32,7 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
   const handleQuickConnect = async (demoRole: "delegate" | "organizer") => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/wca/login", {
+      const res = await fetch(getApiUrl("/api/wca/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ demo_role: demoRole }),
@@ -51,7 +52,7 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
     if (!personalToken.trim()) return;
     setIsLoading(true);
     try {
-      const res = await fetch("/api/wca/login", {
+      const res = await fetch(getApiUrl("/api/wca/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: personalToken.trim() }),
@@ -72,7 +73,7 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
       const redirectUri = `${window.location.origin}/`;
       const endpoint = `/api/wca/oauth/url?redirect_uri=${encodeURIComponent(redirectUri)}`;
 
-      const res = await fetch(endpoint);
+      const res = await fetch(getApiUrl(endpoint));
       if (res.ok) {
         const data = await res.json();
         sessionStorage.setItem("wca_oauth_redirect_uri", data.redirect_uri);
@@ -103,7 +104,7 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
 
     setIsLoading(true);
     try {
-      const res = await fetch("/api/wca/oauth/callback", {
+      const res = await fetch(getApiUrl("/api/wca/oauth/callback"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, redirect_uri }),

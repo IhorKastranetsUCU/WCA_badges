@@ -3,6 +3,7 @@ import { X, Search, Trophy, Shield, Check, RefreshCw, UserCheck } from "lucide-r
 import { WCACompetition, WCARegistrationItem, WCARegistrationsCategorized, WCAProfile } from "@/types/wca";
 import { Competitor } from "@/types/competitor";
 import { CountryFlag } from "@/utils/svgFlags";
+import { getApiUrl } from "@/api/config";
 
 interface WcaImportModalProps {
   isOpen: boolean;
@@ -41,7 +42,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
     if (!isOpen || !selectedCompId) return;
 
     setIsLoadingRegs(true);
-    fetch(`/api/wca/competitions/${selectedCompId}/registrations`)
+    fetch(getApiUrl(`/api/wca/competitions/${selectedCompId}/registrations`))
       .then((res) => (res.ok ? res.json() : null))
       .then((data: WCARegistrationsCategorized) => {
         if (data) setCategorized(data);
@@ -108,7 +109,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
     if (allSelected.length === 0) return;
 
     try {
-      const res = await fetch(`/api/wca/competitions/${selectedCompId}/import`, {
+      const res = await fetch(getApiUrl(`/api/wca/competitions/${selectedCompId}/import`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

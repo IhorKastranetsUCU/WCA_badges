@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { BadgeTemplate } from "@/types/badge";
 import { Competitor, Role } from "@/types/competitor";
+import { getApiUrl } from "@/api/config";
 
 export async function exportBadges(
   template: BadgeTemplate,
@@ -9,7 +10,7 @@ export async function exportBadges(
   side: "front" | "back" | "both" = "front"
 ): Promise<void> {
   try {
-    const res = await fetch("/api/badges/export-pdf", {
+    const res = await fetch(getApiUrl("/api/badges/export-pdf"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X, UserPlus, Shield } from "lucide-react";
 import { Role, Competitor } from "@/types/competitor";
+import { getApiUrl } from "@/api/config";
 
 interface AddCustomAttendeeModalProps {
   isOpen: boolean;
@@ -58,7 +59,7 @@ export const AddCustomAttendeeModal: React.FC<AddCustomAttendeeModalProps> = ({
     };
 
     try {
-      const res = await fetch("/api/competitors/manual", {
+      const res = await fetch(getApiUrl("/api/competitors/manual"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -169,13 +169,17 @@ async def exchange_wca_code(code: str, redirect_uri: Optional[str] = None) -> Di
         "code": code,
         "grant_type": "authorization_code",
     }
+    logger.info(f"Exchanging WCA code with redirect_uri={data['redirect_uri']}, client_id={data['client_id']}")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             res = await client.post(settings.WCA_OAUTH_TOKEN_URL, data=data)
+            logger.info(f"WCA token response status: {res.status_code}")
             if res.status_code == 200:
                 return res.json()
+            else:
+                logger.error(f"WCA token exchange error {res.status_code}: {res.text}")
     except Exception as e:
-        logger.warning(f"Failed to exchange WCA OAuth code: {e}")
+        logger.error(f"Failed to exchange WCA OAuth code: {e}")
 
     # Fallback to simulated token for local dev/testing
     return {
@@ -195,6 +199,7 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
                 f"{settings.WCA_API_URL}/me",
                 headers={"Authorization": f"Bearer {token}"},
             )
+            logger.info(f"WCA /me response status: {res.status_code}")
             if res.status_code == 200:
                 data = res.json().get("me", {})
                 wca_id = data.get("wca_id")
@@ -210,8 +215,10 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
                     is_organizer=True,
                     email=data.get("email"),
                 )
+            else:
+                logger.error(f"WCA /me error {res.status_code}: {res.text}")
     except Exception as e:
-        logger.warning(f"Failed to fetch WCA profile from API: {e}")
+        logger.error(f"Failed to fetch WCA profile from API: {e}")
 
     # Fallback to default delegate profile
     return DEMO_PROFILES["delegate"]
