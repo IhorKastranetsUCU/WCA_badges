@@ -69,12 +69,8 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
   const handleOAuthConnect = async () => {
     setIsLoading(true);
     try {
-      // If running on localhost, use the local callback URL (http://localhost:5173/)
-      const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      const redirectUri = isLocal ? `${window.location.origin}/` : undefined;
-      const endpoint = redirectUri
-        ? `/api/wca/oauth/url?redirect_uri=${encodeURIComponent(redirectUri)}`
-        : "/api/wca/oauth/url";
+      const redirectUri = `${window.location.origin}/`;
+      const endpoint = `/api/wca/oauth/url?redirect_uri=${encodeURIComponent(redirectUri)}`;
 
       const res = await fetch(endpoint);
       if (res.ok) {

@@ -30,9 +30,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://spry_user:spry_password@postgres:5432/spry_badges
       CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,https://v0-wcabadgegenerator3.vercel.app"
       ENVIRONMENT: development
-      WCA_CLIENT_ID: "xJVynyQsxYgjTTE8u1r-wEcVpXa1c80CDaM8TwLPl_E"
-      WCA_CLIENT_SECRET: "oRK9pF2YBvdnp8TTOxp9kAxw1Mx9rWMG7RDJBnWkfIo"
-      WCA_OAUTH_REDIRECT_URI: "https://v0-wcabadgegenerator3.vercel.app/api/auth/callback/wca"
+      WCA_CLIENT_ID: "6AZttc60ofQv3kaUSGgdS0lkgjh06fcsZtjgz32oFDk"
+      WCA_CLIENT_SECRET: "5YhFlPIOy-zS8IP8JI_w7mY9UeLB8TPq8zeuJkus6OE"
+      WCA_OAUTH_REDIRECT_URI: "https://d3genjzo563rwc.cloudfront.net/"
     volumes:
       - ./backend:/app
     depends_on:
