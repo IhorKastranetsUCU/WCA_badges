@@ -53,12 +53,21 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
       .then((res) => (res.ok ? res.json() : null))
       .then((data: WCARegistrationsCategorized) => {
         if (data) {
-          // Pre-select waiting list (pending) competitors by default
-          const withPendingSelected = {
+          // Pre-select competitors by default
+          const withSelected = {
             ...data,
             pending: (data.pending || []).map((item) => ({ ...item, selected: true })),
+            approved: (data.approved || []).map((item) => ({ ...item, selected: true })),
           };
-          setCategorized(withPendingSelected);
+          setCategorized(withSelected);
+
+          // If there are pending waitlist competitors, show pending tab.
+          // Otherwise (e.g. past competitions where everyone is accepted), switch to approved tab so names/details are immediately visible!
+          if (withSelected.pending && withSelected.pending.length > 0) {
+            setActiveCategory("pending");
+          } else if (withSelected.approved && withSelected.approved.length > 0) {
+            setActiveCategory("approved");
+          }
         }
       })
       .catch(() => {})
