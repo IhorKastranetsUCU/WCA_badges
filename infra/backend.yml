@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Backend Hosting: FastAPI on AWS Lambda with Function URL (Mangum ASGI)'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: wca-badges
+    Description: Name of the project tag.
+
+  ImageUri:
+    Type: String
+    Description: ECR Docker Image URI for the Lambda container.
+
+Resources:
+  # 1. IAM Execution Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  # 2. Lambda Function (Container Image)
+  BackendFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-api'
+      Description: FastAPI serverless backend running under Mangum
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60 # 60s timeout accommodates cold starts & database wakeup
+      MemorySize: 512
+      Environment:
+        Variables:
+          ENVIRONMENT: production
+          PROJECT_NAME: !Ref ProjectName
+          WCA_CLIENT_ID: "xJVynyQsxYgjTTE8u1r-wEcVpXa1c80CDaM8TwLPl_E"
+          WCA_CLIENT_SECRET: "oRK9pF2YBvdnp8TTOxp9kAxw1Mx9rWMG7RDJBnWkfIo"
+          WCA_OAUTH_REDIRECT_URI: "https://v0-wcabadgegenerator3.vercel.app/api/auth/callback/wca"
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  # 3. Lambda Function URL (Public HTTPS endpoint)
+  FunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt BackendFunction.Arn
+      AuthType: NONE
+      Cors:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - '*'
+        AllowHeaders:
+          - '*'
+        MaxAge: 86400
+
+  # 4. Public Invoke Permission for the Function URL
+  FunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+Outputs:
+  FunctionUrl:
+    Description: Direct HTTPS URL for the Lambda Function
+    Value: !GetAtt FunctionUrl.FunctionUrl
+    Export:
+      Name: !Sub '${ProjectName}-ApiUrl'
+
+  FunctionArn:
+    Description: ARN of the Lambda Function
+    Value: !GetAtt BackendFunction.Arn
+
+  FunctionName:
+    Description: Name of the Lambda Function
+    Value: !Ref BackendFunction

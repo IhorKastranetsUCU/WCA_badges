@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Amazon Cognito User Pool with Email/Password and Google Federation (Lab 3)'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: wca-badges
+    Description: Project tag name for Cost Explorer tracking.
+
+  CognitoDomainPrefix:
+    Type: String
+    Default: wca-badges-auth
+    Description: Unique prefix for the Cognito hosted domain (https://<prefix>.auth.us-east-1.amazoncognito.com).
+
+  GoogleClientId:
+    Type: String
+    Default: ''
+    Description: Google OAuth 2.0 Web Client ID for Continue with Google.
+
+  GoogleClientSecret:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Google OAuth 2.0 Client Secret (NoEcho to prevent leaking in logs/stack outputs).
+
+  FrontendUrl:
+    Type: String
+    Default: http://localhost:5173
+    Description: Base URL of the deployed frontend (without trailing slash, e.g. https://demo.your-domain.com).
+
+  LocalhostPort:
+    Type: Number
+    Default: 5173
+    Description: Local development port for Vite.
+
+Conditions:
+  HasGoogleCredentials:
+    Fn::And:
+      - Fn::Not: [Fn::Equals: [!Ref GoogleClientId, '']]
+      - Fn::Not: [Fn::Equals: [!Ref GoogleClientSecret, '']]
+
+Resources:
+  # 1. Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${ProjectName}-user-pool'
+      UserPoolTier: ESSENTIALS
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false # Self sign-up enabled
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 7
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolTags:
+        PROJECT_NAME: !Ref ProjectName
+
+  # 2. Google Identity Provider (Conditional on Google credentials provided)
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogleCredentials
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: 'openid email profile'
+      AttributeMapping:
+        email: email
+        email_verified: email_verified
+        name: name
+        picture: picture
+
+  # 3. User Pool Public Client (PKCE, no secret)
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    # DependsOn GoogleIdentityProvider when Google credentials are provided
+    DependsOn:
+      - UserPool
+    Properties:
+      ClientName: !Sub '${ProjectName}-spa-client'
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false # Public client for SPA (React / Vite)
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      SupportedIdentityProviders:
+        Fn::If:
+          - HasGoogleCredentials
+          - - COGNITO
+            - Google
+          - - COGNITO
+      CallbackURLs:
+        - !Sub '${FrontendUrl}/'
+        - !Sub '${FrontendUrl}/login/'
+        - !Sub '${FrontendUrl}/login'
+        - !Sub 'http://localhost:${LocalhostPort}/'
+        - !Sub 'http://localhost:${LocalhostPort}/login/'
+        - !Sub 'http://localhost:${LocalhostPort}/login'
+      LogoutURLs:
+        - !Sub '${FrontendUrl}/'
+        - !Sub 'http://localhost:${LocalhostPort}/'
+
+  # 4. User Pool Hosted Domain (v2 Managed Login)
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref UserPool
+      ManagedLoginVersion: 2
+
+  # 5. Managed Login Branding (Required for v2 Managed Login)
+  ManagedLoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn:
+      - UserPoolDomain
+      - UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref UserPoolClient
+      UseCognitoProvidedValues: true
+
+Outputs:
+  UserPoolId:
+    Description: The ID of the Cognito User Pool
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub '${ProjectName}-UserPoolId'
+
+  UserPoolClientId:
+    Description: The ID of the Cognito App Client (Public SPA)
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub '${ProjectName}-UserPoolClientId'
+
+  CognitoDomain:
+    Description: Hosted Cognito Domain for Managed Login
+    Value: !Sub 'https://${CognitoDomainPrefix}.auth.us-east-1.amazoncognito.com'
+
+  CognitoIssuerUrl:
+    Description: The OIDC Authority URL
+    Value: !Sub 'https://cognito-idp.us-east-1.amazonaws.com/${UserPool}'
+
+  LoginUrl:
+    Description: Direct link to Cognito Managed Login
+    Value: !Sub 'https://${CognitoDomainPrefix}.auth.us-east-1.amazoncognito.com/login?client_id=${UserPoolClient}&response_type=code&scope=openid+email+profile&redirect_uri=${FrontendUrl}/'

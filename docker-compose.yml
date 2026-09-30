@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: spry_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: spry_badges
+      POSTGRES_USER: spry_user
+      POSTGRES_PASSWORD: spry_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spry_user -d spry_badges"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: spry_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://spry_user:spry_password@postgres:5432/spry_badges
+      CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,https://v0-wcabadgegenerator3.vercel.app"
+      ENVIRONMENT: development
+      WCA_CLIENT_ID: "xJVynyQsxYgjTTE8u1r-wEcVpXa1c80CDaM8TwLPl_E"
+      WCA_CLIENT_SECRET: "oRK9pF2YBvdnp8TTOxp9kAxw1Mx9rWMG7RDJBnWkfIo"
+      WCA_OAUTH_REDIRECT_URI: "https://v0-wcabadgegenerator3.vercel.app/api/auth/callback/wca"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: spry_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  postgres_data:

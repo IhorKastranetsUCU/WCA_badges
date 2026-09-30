@@ -1,0 +1,139 @@
+import { jsPDF } from "jspdf";
+import { BadgeTemplate } from "@/types/badge";
+import { Competitor, Role } from "@/types/competitor";
+
+export async function exportBadges(
+  template: BadgeTemplate,
+  competitors: Competitor[],
+  roles: Role[],
+  side: "front" | "back" | "both" = "front"
+): Promise<void> {
+  try {
+    const res = await fetch("/api/badges/export-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        side,
+        template_override: {
+          dimensions: template.dimensions,
+          sides: template.sides,
+        },
+      }),
+    });
+
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `wca_badges_${template.dimensions.preset}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+  } catch (err) {
+    console.warn("Backend PDF export unavailable, falling back to client-side jsPDF:", err);
+  }
+
+  const { width_mm, height_mm } = template.dimensions;
+  const orientation = width_mm > height_mm ? "landscape" : "portrait";
+  const doc = new jsPDF({
+    orientation,
+    unit: "mm",
+    format: [width_mm, height_mm],
+  });
+
+  const rolesMap = new Map(roles.map((r) => [r.id, r]));
+  const sidesToExport = side === "both" ? (["front", "back"] as const) : [side];
+
+  let firstPage = true;
+
+  competitors.forEach((comp) => {
+    const compRole = comp.role_id ? rolesMap.get(comp.role_id) : undefined;
+    const roleName = compRole?.name || "Participant";
+
+    sidesToExport.forEach((currentSide) => {
+      if (!firstPage) {
+        doc.addPage([width_mm, height_mm], orientation);
+      }
+      firstPage = false;
+
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, width_mm, height_mm, "F");
+
+      const sideDef = template.sides[currentSide];
+      const elements = [...sideDef.elements]
+        .filter((e) => e.enabled)
+        .sort((a, b) => a.position.z_index - b.position.z_index);
+
+      elements.forEach((elem) => {
+        const { x_mm, y_mm, width_mm: w, height_mm: h } = elem.position;
+        const style = elem.style;
+
+        if (style?.has_background) {
+          doc.setFillColor(style.background_color || "#FFFFFF");
+          doc.rect(x_mm, y_mm, w, h, "F");
+        }
+
+        let text = "";
+        if (elem.type === "name") {
+          if (elem.name_display === "local_only" && comp.name_local) {
+            text = comp.name_local;
+          } else if (elem.name_display === "both" && comp.name_local) {
+            text = `${comp.name_latin} (${comp.name_local})`;
+          } else {
+            text = comp.name_latin;
+          }
+        } else if (elem.type === "wca_id") {
+          const raw = comp.wca_id || "Newcomer";
+          if (elem.format_mode === "prefix_label") {
+            text = `WCA ID: ${raw}`;
+          } else if (elem.format_mode === "custom") {
+            text = `${elem.format_prefix || ""}${raw}${elem.format_suffix || ""}`;
+          } else {
+            text = raw;
+          }
+        } else if (elem.type === "competition_id") {
+          const raw = String(comp.csv_index || 1);
+          if (elem.format_mode === "prefix_label") {
+            text = `ID: ${raw}`;
+          } else if (elem.format_mode === "custom") {
+            text = `${elem.format_prefix || ""}${raw}${elem.format_suffix || ""}`;
+          } else {
+            text = raw;
+          }
+        } else if (elem.type === "role") {
+          text = roleName;
+          if (compRole?.style) {
+            doc.setFillColor(compRole.style.background_color);
+            doc.roundedRect(x_mm, y_mm, w, h, 2, 2, "F");
+          }
+        } else if (elem.type === "flag") {
+          doc.setFillColor(0, 87, 183);
+          doc.rect(x_mm, y_mm, w, h / 2, "F");
+          doc.setFillColor(255, 221, 0);
+          doc.rect(x_mm, y_mm + h / 2, w, h / 2, "F");
+          return;
+        }
+
+        if (style?.uppercase) {
+          text = text.toUpperCase();
+        }
+
+        const fontSizePt = (style?.font_size || 12) * 0.75;
+        doc.setFontSize(fontSizePt);
+        doc.setTextColor(style?.text_color || "#111827");
+
+        const align = style?.text_align || "center";
+        const alignOption: "left" | "center" | "right" = align;
+        const textX = align === "center" ? x_mm + w / 2 : align === "right" ? x_mm + w - 2 : x_mm + 2;
+        const textY = y_mm + h / 2 + fontSizePt / 3.5;
+
+        doc.text(text, textX, textY, { align: alignOption });
+      });
+    });
+  });
+
+  doc.save(`wca_badges_${template.dimensions.preset}.pdf`);
+}
