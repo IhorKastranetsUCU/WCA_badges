@@ -131,6 +131,41 @@ def render_badges_pdf(
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=(page_width, page_height))
 
+    # Pre-cache background images outside competitor loop for high performance and low memory
+    side_bg_draw_params: Dict[str, Any] = {}
+    sides_to_check = ["front", "back"] if side_to_export == "both" else [side_to_export]
+    for side_name in sides_to_check:
+        side_def = sides_config.get(side_name, {})
+        bg_url = side_def.get("background_url")
+        if bg_url:
+            try:
+                img_reader = None
+                if bg_url.startswith("data:image"):
+                    _, b64data = bg_url.split(",", 1)
+                    img_bytes = base64.b64decode(b64data)
+                    img_reader = ImageReader(io.BytesIO(img_bytes))
+                elif bg_url.startswith("http://") or bg_url.startswith("https://"):
+                    img_reader = ImageReader(bg_url)
+
+                if img_reader:
+                    img_w, img_h = img_reader.getSize()
+                    if img_w > 0 and img_h > 0:
+                        # Emulate CSS background-size: cover; background-position: center
+                        scale = max(page_width / img_w, page_height / img_h)
+                        draw_w = img_w * scale
+                        draw_h = img_h * scale
+                        offset_x = (page_width - draw_w) / 2.0
+                        offset_y = (page_height - draw_h) / 2.0
+                        side_bg_draw_params[side_name] = {
+                            "reader": img_reader,
+                            "x": offset_x,
+                            "y": offset_y,
+                            "w": draw_w,
+                            "h": draw_h,
+                        }
+            except Exception as e:
+                logger.warning(f"Failed to pre-decode background image for side {side_name}: {e}")
+
     for comp in competitors:
         role_id = comp.get("role_id")
         role_data = roles.get(role_id, {}) if role_id else {}
@@ -148,16 +183,21 @@ def render_badges_pdf(
             c.setFillColor(HexColor("#FFFFFF"))
             c.rect(0, 0, page_width, page_height, fill=1, stroke=0)
 
-            # Optional uploaded background image
-            bg_url = side_def.get("background_url")
-            if bg_url and bg_url.startswith("data:image"):
-                try:
-                    _, b64data = bg_url.split(",", 1)
-                    img_bytes = base64.b64decode(b64data)
-                    img_reader = ImageReader(io.BytesIO(img_bytes))
-                    c.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
-                except Exception as e:
-                    logger.warning(f"Failed to draw background image: {e}")
+            # Optional uploaded background image (cover & center)
+            if current_side in side_bg_draw_params:
+                bg_params = side_bg_draw_params[current_side]
+                c.saveState()
+                path = c.beginPath()
+                path.rect(0, 0, page_width, page_height)
+                c.clipPath(path, stroke=0)
+                c.drawImage(
+                    bg_params["reader"],
+                    bg_params["x"],
+                    bg_params["y"],
+                    width=bg_params["w"],
+                    height=bg_params["h"],
+                )
+                c.restoreState()
             c.restoreState()
 
             sorted_elements = sorted(

@@ -10,6 +10,9 @@ interface RoleInspectorProps {
   onUpdateRole: (roleId: string, patch: { name?: string; style?: Partial<RoleStyle> }) => void;
   competitors: Competitor[];
   onAssignUser: (roleId: string, competitorId: string) => void;
+  onAssignAll?: (roleId: string) => void;
+  onSetDefaultRole?: (roleId: string) => void;
+  currentCompetitorId?: string;
 }
 
 const FONT_FAMILIES = ["Inter", "Roboto", "Montserrat", "Open Sans", "Arial"];
@@ -22,6 +25,9 @@ export const RoleInspector: React.FC<RoleInspectorProps> = ({
   onUpdateRole,
   competitors,
   onAssignUser,
+  onAssignAll,
+  onSetDefaultRole,
+  currentCompetitorId,
 }) => {
   const [newRoleName, setNewRoleName] = useState("");
   const activeRole = roles.find((r) => r.id === activeRoleId) || roles[0];
@@ -35,6 +41,10 @@ export const RoleInspector: React.FC<RoleInspectorProps> = ({
   };
 
   if (!activeRole) return null;
+
+  const currentCompAssigned =
+    currentCompetitorId &&
+    competitors.find((c) => c.id === currentCompetitorId)?.role_id === activeRole.id;
 
   return (
     <div className="space-y-5">
@@ -81,15 +91,65 @@ export const RoleInspector: React.FC<RoleInspectorProps> = ({
         })}
       </div>
 
-      {/* 2. Editable Role Name */}
-      <div>
-        <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Role Name</label>
-        <input
-          type="text"
-          value={activeRole.name}
-          onChange={(e) => onUpdateRole(activeRole.id, { name: e.target.value })}
-          className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
-        />
+      {/* 2. Editable Role Name & Bulk Apply */}
+      <div className="space-y-2">
+        <div>
+          <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Role Name</label>
+          <input
+            type="text"
+            value={activeRole.name}
+            onChange={(e) => onUpdateRole(activeRole.id, { name: e.target.value })}
+            className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Bulk Action Buttons */}
+        <div className="flex flex-col gap-1.5 pt-1">
+          {onAssignAll && (
+            <button
+              type="button"
+              onClick={() => onAssignAll(activeRole.id)}
+              className="w-full py-2 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Apply "{activeRole.name}" to All ({competitors.length}) Attendees</span>
+            </button>
+          )}
+
+          {currentCompetitorId && (
+            <button
+              type="button"
+              onClick={() => onAssignUser(activeRole.id, currentCompetitorId)}
+              className={`w-full py-1.5 px-3 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                currentCompAssigned
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                  : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>
+                {currentCompAssigned
+                  ? "Assigned to Previewed Attendee"
+                  : "Assign to Previewed Attendee"}
+              </span>
+            </button>
+          )}
+
+          {onSetDefaultRole && (
+            <button
+              type="button"
+              onClick={() => onSetDefaultRole(activeRole.id)}
+              className={`w-full py-1.5 px-3 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeRole.is_default
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                  : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>{activeRole.is_default ? "Default Template Role" : "Make Default Role"}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 3. Role Styling Properties */}

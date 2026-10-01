@@ -319,23 +319,29 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 pb-2">
-            <button
-              type="button"
-              onClick={() => handleToggleCategoryAll(activeCategory, true)}
-              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
-            >
-              Select All
-            </button>
-            <span className="text-slate-300">|</span>
-            <button
-              type="button"
-              onClick={() => handleToggleCategoryAll(activeCategory, false)}
-              className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
-            >
-              Deselect All
-            </button>
-          </div>
+          {activeCategory !== "cancelled" ? (
+            <div className="flex items-center gap-2 pb-2">
+              <button
+                type="button"
+                onClick={() => handleToggleCategoryAll(activeCategory, true)}
+                className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
+              >
+                Select All
+              </button>
+              <span className="text-slate-300">|</span>
+              <button
+                type="button"
+                onClick={() => handleToggleCategoryAll(activeCategory, false)}
+                className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                Deselect All
+              </button>
+            </div>
+          ) : (
+            <span className="text-[11px] text-slate-400 italic pb-2">
+              Cancelled / rejected competitors cannot be imported
+            </span>
+          )}
         </div>
 
         {/* Search Bar */}
@@ -365,21 +371,35 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
             filteredItems.map((item) => (
               <div
                 key={item.id}
-                onClick={() => handleToggleRegistration(item.id)}
-                className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-all cursor-pointer ${
-                  item.selected ? "bg-blue-50/70" : "hover:bg-slate-50"
+                onClick={() => {
+                  if (activeCategory !== "cancelled") {
+                    handleToggleRegistration(item.id);
+                  }
+                }}
+                className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-all ${
+                  activeCategory === "cancelled"
+                    ? "opacity-60 cursor-not-allowed bg-slate-50/50"
+                    : item.selected
+                    ? "bg-blue-50/70 cursor-pointer"
+                    : "hover:bg-slate-50 cursor-pointer"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
-                      item.selected
-                        ? "bg-blue-600 border-blue-600 text-white"
-                        : "border-slate-300 bg-white"
-                    }`}
-                  >
-                    {item.selected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                  </div>
+                  {activeCategory !== "cancelled" ? (
+                    <div
+                      className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                        item.selected
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "border-slate-300 bg-white"
+                      }`}
+                    >
+                      {item.selected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-bold">
+                      ✕
+                    </div>
+                  )}
 
                   <div className="w-6 h-4 shrink-0 shadow-sm rounded-sm overflow-hidden">
                     <CountryFlag iso2={item.country_iso2} />

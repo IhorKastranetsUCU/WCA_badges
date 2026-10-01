@@ -66,7 +66,15 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
     except UnicodeDecodeError:
         text = content_bytes.decode("latin-1", errors="replace")
 
-    reader = csv.reader(io.StringIO(text))
+    # Sniff or auto-detect delimiter: comma, semicolon, tab
+    sample = text[:4096]
+    delimiter = ","
+    if sample.count(";") > sample.count(",") and sample.count(";") > sample.count("\t"):
+        delimiter = ";"
+    elif sample.count("\t") > sample.count(","):
+        delimiter = "\t"
+
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
     rows = list(reader)
     if not rows:
         return []
@@ -84,7 +92,7 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
         elif "role" in col or "role(s)" in col:
             col_map["role"] = idx
 
-        if "status" in col or "registration" in col or "competing" in col:
+        if any(term in col for term in ["status", "registration", "competing", "state", "attend"]):
             status_indices.append(idx)
 
     if "name" not in col_map and len(header) >= 1:
@@ -92,7 +100,8 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
 
     EXCLUDED_STATUSES = {
         "d", "del", "deleted", "rejected", "cancelled", "canceled",
-        "withdrawn", "declined", "dropped", "false", "no", "0"
+        "withdrawn", "declined", "dropped", "false", "no", "0",
+        "unpaid", "not competing", "inactive", "removed"
     }
 
     parsed_competitors = []

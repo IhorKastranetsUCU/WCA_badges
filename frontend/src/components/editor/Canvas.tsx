@@ -322,9 +322,15 @@ export const Canvas: React.FC<CanvasProps> = ({
                           ? compRole?.style.text_color || "#FFFFFF"
                           : style?.text_color || "#111827",
                       textAlign,
+                      justifyContent:
+                        textAlign === "left"
+                          ? "flex-start"
+                          : textAlign === "right"
+                          ? "flex-end"
+                          : "center",
                       letterSpacing: style?.letter_spacing_mm ? `${style.letter_spacing_mm * scale}px` : undefined,
                     }}
-                    className={`w-full h-full flex items-center ${justifyClass} truncate pointer-events-none select-none`}
+                    className="w-full h-full flex items-center px-2 truncate pointer-events-none select-none"
                   >
                     {contentText}
                   </div>

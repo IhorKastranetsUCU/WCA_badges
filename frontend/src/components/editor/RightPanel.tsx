@@ -20,6 +20,9 @@ interface RightPanelProps {
   onUpdateRole: (roleId: string, patch: { name?: string; style?: Partial<RoleStyle> }) => void;
   competitors: Competitor[];
   onAssignUser: (roleId: string, competitorId: string) => void;
+  onAssignAll?: (roleId: string) => void;
+  onSetDefaultRole?: (roleId: string) => void;
+  currentCompetitorId?: string;
   onLayerChange: (action: "bring_to_front" | "send_to_back" | "move_up" | "move_down") => void;
 }
 
@@ -35,6 +38,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   onUpdateRole,
   competitors,
   onAssignUser,
+  onAssignAll,
+  onSetDefaultRole,
+  currentCompetitorId,
   onLayerChange,
 }) => {
   const [activeTab, setActiveTab] = useState<"style" | "position">("style");
@@ -103,6 +109,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           onUpdateRole={onUpdateRole}
           competitors={competitors}
           onAssignUser={onAssignUser}
+          onAssignAll={onAssignAll}
+          onSetDefaultRole={onSetDefaultRole}
+          currentCompetitorId={currentCompetitorId}
         />
       )}
 

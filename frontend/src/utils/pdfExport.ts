@@ -69,6 +69,23 @@ export async function exportBadges(
       doc.rect(0, 0, width_mm, height_mm, "F");
 
       const sideDef = template.sides[currentSide];
+      if (sideDef.background_url) {
+        try {
+          doc.addImage(
+            sideDef.background_url,
+            sideDef.background_url.startsWith("data:image/png") ? "PNG" : "JPEG",
+            0,
+            0,
+            width_mm,
+            height_mm,
+            undefined,
+            "FAST"
+          );
+        } catch (e) {
+          console.warn("Failed to render background image in jsPDF fallback:", e);
+        }
+      }
+
       const elements = [...sideDef.elements]
         .filter((e) => e.enabled)
         .sort((a, b) => a.position.z_index - b.position.z_index);
@@ -133,7 +150,7 @@ export async function exportBadges(
             doc.rect(x_mm, y_mm, w, h, "F");
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(8);
-            doc.text(iso, x_mm + w / 2, y_mm + h / 2 + 1, { align: "center" });
+            doc.text(iso, x_mm + w / 2, y_mm + h / 2, { align: "center", baseline: "middle" });
           }
           return;
         }
@@ -147,12 +164,13 @@ export async function exportBadges(
         doc.setFontSize(fontSizePt);
         doc.setTextColor(effectiveStyle?.text_color || (elem.type === "role" ? "#FFFFFF" : "#111827"));
 
-        const align = effectiveStyle?.text_align || "center";
+        const align = effectiveStyle?.text_align || (elem.type === "competition_id" ? "right" : "center");
         const alignOption: "left" | "center" | "right" = align;
-        const textX = align === "center" ? x_mm + w / 2 : align === "right" ? x_mm + w - 2 : x_mm + 2;
-        const textY = y_mm + h / 2 + fontSizePt / 3.5;
+        const pad_mm = 2.0;
+        const textX = align === "center" ? x_mm + w / 2 : align === "right" ? x_mm + w - pad_mm : x_mm + pad_mm;
+        const textY = y_mm + h / 2;
 
-        doc.text(text, textX, textY, { align: alignOption });
+        doc.text(text, textX, textY, { align: alignOption, baseline: "middle" });
       });
     });
   });

@@ -41,7 +41,7 @@ Resources:
         ImageUri: !Ref ImageUri
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 60 # 60s timeout accommodates cold starts & database wakeup
-      MemorySize: 512
+      MemorySize: 1536
       Environment:
         Variables:
           ENVIRONMENT: production

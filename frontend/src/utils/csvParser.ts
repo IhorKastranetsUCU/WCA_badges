@@ -33,7 +33,16 @@ export function parseClientCsv(csvText: string): Competitor[] {
   const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return [];
 
-  const header = lines[0].split(",").map((c) => c.trim().toLowerCase().replace(/['"]/g, ""));
+  // Auto-detect delimiter: comma, semicolon, tab
+  const sampleLine = lines[0];
+  const countComma = (sampleLine.match(/,/g) || []).length;
+  const countSemi = (sampleLine.match(/;/g) || []).length;
+  const countTab = (sampleLine.match(/\t/g) || []).length;
+  let delimiter = ",";
+  if (countSemi > countComma && countSemi > countTab) delimiter = ";";
+  else if (countTab > countComma && countTab > countSemi) delimiter = "\t";
+
+  const header = lines[0].split(delimiter).map((c) => c.trim().toLowerCase().replace(/['"]/g, ""));
   let nameIdx = header.findIndex((h) => h.includes("name") && !h.includes("competitor"));
   if (nameIdx === -1) nameIdx = 0;
   const wcaIdIdx = header.findIndex((h) => h.includes("wca"));
@@ -41,7 +50,7 @@ export function parseClientCsv(csvText: string): Competitor[] {
 
   const statusIndices: number[] = [];
   header.forEach((h, idx) => {
-    if (h.includes("status") || h.includes("competing") || h.includes("registration")) {
+    if (h.includes("status") || h.includes("competing") || h.includes("registration") || h.includes("state")) {
       statusIndices.push(idx);
     }
   });
@@ -59,6 +68,10 @@ export function parseClientCsv(csvText: string): Competitor[] {
     "false",
     "no",
     "0",
+    "unpaid",
+    "not competing",
+    "inactive",
+    "removed",
   ]);
 
   const competitors: Competitor[] = [];
@@ -73,7 +86,7 @@ export function parseClientCsv(csvText: string): Competitor[] {
       const char = rawLine[charIdx];
       if (char === '"') {
         insideQuote = !insideQuote;
-      } else if (char === "," && !insideQuote) {
+      } else if (char === delimiter && !insideQuote) {
         cols.push(entry.trim());
         entry = "";
       } else {

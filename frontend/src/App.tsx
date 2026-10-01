@@ -535,17 +535,44 @@ export const App: React.FC = () => {
   const handleBackgroundUpload = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const url = e.target?.result as string;
-      setTemplate((prev) => ({
-        ...prev,
-        sides: {
-          ...prev.sides,
-          [currentSide]: {
-            ...prev.sides[currentSide],
-            background_url: url,
+      const rawDataUrl = e.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        // Optimize background image to max 1800px dimension and JPEG 0.88 quality
+        // Preserves crisp 300-400 DPI print quality while reducing payload from ~10MB to ~300KB (preventing Lambda payload limits and OOM)
+        const maxDim = 1800;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        let optimizedUrl = rawDataUrl;
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          optimizedUrl = canvas.toDataURL("image/jpeg", 0.88);
+        }
+        setTemplate((prev) => ({
+          ...prev,
+          sides: {
+            ...prev.sides,
+            [currentSide]: {
+              ...prev.sides[currentSide],
+              background_url: optimizedUrl,
+            },
           },
-        },
-      }));
+        }));
+      };
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
   };
@@ -590,6 +617,27 @@ export const App: React.FC = () => {
     setCompetitors((prev) =>
       prev.map((c) => (c.id === competitorId ? { ...c, role_id: roleId } : c))
     );
+  };
+
+  const handleAssignAllToRole = (roleId: string) => {
+    setCompetitors((prev) => prev.map((c) => ({ ...c, role_id: roleId })));
+  };
+
+  const handleSetDefaultRole = (roleId: string) => {
+    setRoles((prev) => prev.map((r) => ({ ...r, is_default: r.id === roleId })));
+  };
+
+  const handleSelectElement = (id: string | null) => {
+    setSelectedElementId(id);
+    if (id) {
+      const elem = currentSideConfig.elements.find((e) => e.id === id);
+      if (elem?.type === "role") {
+        const currentComp = competitors[currentParticipantIndex];
+        if (currentComp?.role_id) {
+          setActiveRoleId(currentComp.role_id);
+        }
+      }
+    }
   };
 
   const handleImportWcaCompetitors = (imported: Competitor[]) => {
@@ -676,7 +724,7 @@ export const App: React.FC = () => {
           elements={currentSideConfig.elements}
           backgroundUrl={currentSideConfig.background_url}
           selectedElementId={selectedElementId}
-          onSelectElement={setSelectedElementId}
+          onSelectElement={handleSelectElement}
           onUpdateElementPosition={handleUpdateElementPosition}
           onDeleteElement={handleDeleteElement}
           currentCompetitor={competitors[currentParticipantIndex]}
@@ -696,6 +744,9 @@ export const App: React.FC = () => {
           onUpdateRole={handleUpdateRole}
           competitors={competitors}
           onAssignUser={handleAssignUser}
+          onAssignAll={handleAssignAllToRole}
+          onSetDefaultRole={handleSetDefaultRole}
+          currentCompetitorId={competitors[currentParticipantIndex]?.id}
           onLayerChange={handleLayerChange}
         />
       </div>
