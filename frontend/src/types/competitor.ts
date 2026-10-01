@@ -8,6 +8,8 @@ export interface Competitor {
   country_iso2?: string | null;
   country_name?: string | null;
   role_id?: string | null;
+  avatar_url?: string | null;
+  registrant_id?: number | null;
   created_at?: string;
 }
 

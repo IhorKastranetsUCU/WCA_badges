@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Check, UserCheck, Shield, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { Plus, Check, UserCheck, Shield, AlignLeft, AlignCenter, AlignRight, Search, X } from "lucide-react";
 import { Role, RoleStyle, Competitor } from "@/types/competitor";
 
 interface RoleInspectorProps {
@@ -30,6 +30,8 @@ export const RoleInspector: React.FC<RoleInspectorProps> = ({
   currentCompetitorId,
 }) => {
   const [newRoleName, setNewRoleName] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "assigned">("all");
   const activeRole = roles.find((r) => r.id === activeRoleId) || roles[0];
 
   const handleCreate = (e: React.FormEvent) => {
@@ -297,21 +299,94 @@ export const RoleInspector: React.FC<RoleInspectorProps> = ({
         </div>
       </div>
 
-      {/* 4. Assigned Users Section */}
+      {/* 4. Assigned Users Section with Search */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-[11px] font-semibold text-slate-500 block">Assigned Users</label>
-          <span className="text-[10px] text-slate-400">
-            {competitors.filter((c) => (c.role_id || "r-participant") === activeRole.id).length} members
+          <span className="text-[10px] text-slate-400 font-medium">
+            {competitors.filter((c) => (c.role_id || "r-participant") === activeRole.id).length} assigned / {competitors.length} total
           </span>
         </div>
 
+        {/* Search Input for Attendees */}
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by Name, ID, or WCA ID..."
+            value={userSearch}
+            onChange={(e) => setUserSearch(e.target.value)}
+            className="w-full text-xs pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {userSearch && (
+            <button
+              type="button"
+              onClick={() => setUserSearch("")}
+              className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Quick Filter: All vs Only Assigned to this role */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setFilterMode("all")}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-all cursor-pointer ${
+              filterMode === "all"
+                ? "bg-slate-200 text-slate-800"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            All Attendees
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode("assigned")}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-all cursor-pointer ${
+              filterMode === "assigned"
+                ? "bg-blue-100 text-blue-700"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            Only Assigned
+          </button>
+        </div>
+
         <div className="max-h-48 overflow-y-auto space-y-1 bg-slate-50 p-2 rounded-xl border border-slate-200">
-          {competitors.length === 0 ? (
-            <div className="text-[11px] text-slate-400 p-2 text-center">No participants loaded yet</div>
-          ) : (
-            competitors.map((comp) => {
+          {(() => {
+            const query = userSearch.toLowerCase().trim();
+            const filtered = competitors.filter((comp) => {
               const isAssigned = (comp.role_id || "r-participant") === activeRole.id;
+              if (filterMode === "assigned" && !isAssigned) return false;
+
+              if (!query) return true;
+              const nameLatin = (comp.name_latin || "").toLowerCase();
+              const nameLocal = (comp.name_local || "").toLowerCase();
+              const wcaId = (comp.wca_id || "").toLowerCase();
+              const compId = String(comp.registrant_id ?? comp.csv_index ?? "").toLowerCase();
+
+              return (
+                nameLatin.includes(query) ||
+                nameLocal.includes(query) ||
+                wcaId.includes(query) ||
+                compId.includes(query)
+              );
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div className="text-[11px] text-slate-400 p-3 text-center">
+                  {userSearch ? "No matching attendees found" : "No attendees loaded yet"}
+                </div>
+              );
+            }
+
+            return filtered.map((comp) => {
+              const isAssigned = (comp.role_id || "r-participant") === activeRole.id;
+              const displayCompId = comp.registrant_id ?? comp.csv_index;
               return (
                 <div
                   key={comp.id}
@@ -321,13 +396,16 @@ export const RoleInspector: React.FC<RoleInspectorProps> = ({
                 >
                   <div className="truncate flex-1 mr-2">
                     <span className="truncate">{comp.name_latin}</span>
-                    <span className="text-[10px] text-slate-400 ml-1.5">
-                      ({comp.wca_id || `#${comp.csv_index}`})
+                    <span className="text-[10px] text-slate-400 ml-1.5 font-mono">
+                      ({comp.wca_id ? `${comp.wca_id} · ` : ""}ID: {displayCompId})
                     </span>
                   </div>
 
                   {isAssigned ? (
-                    <div title="Assigned to this role" className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <div
+                      title="Assigned to this role"
+                      className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"
+                    >
                       <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                     </div>
                   ) : (
@@ -335,15 +413,15 @@ export const RoleInspector: React.FC<RoleInspectorProps> = ({
                       type="button"
                       title="Assign to this role"
                       onClick={() => onAssignUser(activeRole.id, comp.id)}
-                      className="w-5 h-5 rounded-full bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-500 flex items-center justify-center transition-all cursor-pointer"
+                      className="w-5 h-5 rounded-full bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-500 flex items-center justify-center transition-all cursor-pointer shrink-0"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
               );
-            })
-          )}
+            });
+          })()}
         </div>
       </div>
     </div>

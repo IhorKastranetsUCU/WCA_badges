@@ -91,6 +91,8 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
             col_map["country"] = idx
         elif "role" in col or "role(s)" in col:
             col_map["role"] = idx
+        elif any(id_term == col for id_term in ["registrant id", "registrant_id", "registrantid", "comp id", "comp_id", "bib"]) or (col == "id" and "registrant_id" not in col_map):
+            col_map["registrant_id"] = idx
 
         if any(term in col for term in ["status", "registration", "competing", "state", "attend"]):
             status_indices.append(idx)
@@ -138,8 +140,16 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
             country_name = row[col_map["country"]].strip() or "Ukraine"
         iso2, full_country = resolve_country_iso2(country_name)
 
+        reg_id_val = None
+        if "registrant_id" in col_map and col_map["registrant_id"] < len(row):
+            raw_id = row[col_map["registrant_id"]].strip()
+            if raw_id.isdigit():
+                reg_id_val = int(raw_id)
+
+        final_csv_index = reg_id_val if reg_id_val is not None else seq_index
+
         parsed_competitors.append({
-            "csv_index": seq_index,
+            "csv_index": final_csv_index,
             "name_latin": latin,
             "name_local": local,
             "name_raw": raw_name,

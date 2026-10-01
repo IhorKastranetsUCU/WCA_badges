@@ -113,6 +113,9 @@ async def export_badges_pdf(
         template_dimensions=dims,
         sides_config=sides,
         side_to_export=payload.side,
+        paper_size=payload.paper_size,
+        parity=payload.parity,
+        crop_marks=payload.crop_marks,
     )
 
     return Response(

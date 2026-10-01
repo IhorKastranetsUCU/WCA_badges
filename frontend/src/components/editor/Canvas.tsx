@@ -1,7 +1,10 @@
 import React, { useRef, useState, useEffect } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { User } from "lucide-react";
 import { BadgeDimensions, BadgeElement } from "@/types/badge";
 import { Competitor, Role } from "@/types/competitor";
 import { CountryFlag } from "@/utils/svgFlags";
+import { ScheduleTable } from "./ScheduleTable";
 
 interface CanvasProps {
   dimensions: BadgeDimensions;
@@ -218,7 +221,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 contentText = raw;
               }
             } else if (elem.type === "competition_id") {
-              const raw = String(currentCompetitor?.csv_index || 1);
+              const raw = String(currentCompetitor?.registrant_id ?? currentCompetitor?.csv_index ?? 1);
               if (elem.format_mode === "prefix_label") {
                 contentText = `ID: ${raw}`;
               } else if (elem.format_mode === "custom") {
@@ -274,7 +277,10 @@ export const Canvas: React.FC<CanvasProps> = ({
                   height: `${elemHPx}px`,
                   transform: `rotate(${pos.rotation_deg}deg)`,
                   zIndex: pos.z_index,
-                  opacity: elem.type === "flag" ? elem.opacity : style?.opacity ?? 1.0,
+                  opacity:
+                    elem.type === "flag" || elem.type === "avatar" || elem.type === "qr_code" || elem.type === "schedule"
+                      ? elem.opacity ?? 1.0
+                      : style?.opacity ?? 1.0,
                   backgroundColor:
                     elem.type === "role"
                       ? compRole?.style.background_color || "#2563EB"
@@ -284,11 +290,25 @@ export const Canvas: React.FC<CanvasProps> = ({
                   borderRadius:
                     elem.type === "role"
                       ? `${(compRole?.style.border_radius || 4) * scale * 0.25}px`
+                      : elem.type === "avatar"
+                      ? elem.border_radius_mm !== undefined
+                        ? `${elem.border_radius_mm * scale * 0.25}px`
+                        : "8px"
                       : style?.has_background
                       ? `${style.border_radius * scale * 0.25}px`
                       : undefined,
-                  borderWidth: style?.has_background && style.border_width > 0 ? `${style.border_width}px` : undefined,
-                  borderColor: style?.has_background ? style.border_color : undefined,
+                  borderWidth:
+                    elem.type === "avatar" && elem.border_width_mm
+                      ? `${elem.border_width_mm * scale * 0.25}px`
+                      : style?.has_background && style.border_width > 0
+                      ? `${style.border_width}px`
+                      : undefined,
+                  borderColor:
+                    elem.type === "avatar" && elem.border_color
+                      ? elem.border_color
+                      : style?.has_background
+                      ? style.border_color
+                      : undefined,
                   padding: style?.has_background ? `${style.padding_mm * scale * 0.25}px` : undefined,
                 }}
                 className={`group cursor-move transition-shadow ${
@@ -299,6 +319,65 @@ export const Canvas: React.FC<CanvasProps> = ({
                 {elem.type === "flag" ? (
                   <div className="w-full h-full pointer-events-none">
                     <CountryFlag iso2={currentCompetitor?.country_iso2 || "UA"} opacity={elem.opacity} />
+                  </div>
+                ) : elem.type === "avatar" ? (
+                  <div className="w-full h-full pointer-events-none overflow-hidden flex items-center justify-center bg-slate-100 rounded-[inherit]">
+                    {currentCompetitor?.avatar_url ? (
+                      <img
+                        src={currentCompetitor.avatar_url}
+                        alt={currentCompetitor.name_latin}
+                        className="w-full h-full object-cover rounded-[inherit]"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-slate-400 p-1 text-center w-full h-full">
+                        <User className="w-1/2 h-1/2 stroke-[1.5]" />
+                        <span className="text-[9px] font-semibold mt-0.5 truncate max-w-full px-1">
+                          {currentCompetitor?.name_latin?.split(" ")[0] || "Photo"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : elem.type === "qr_code" ? (
+                  <div className="w-full h-full pointer-events-none flex flex-col items-center justify-center p-1 bg-white rounded-lg shadow-sm border border-slate-200">
+                    {elem.qr_label && elem.qr_label_position !== "bottom" && (
+                      <div
+                        style={{ fontSize: `${Math.max(6, Math.min(11, elemWPx * 0.11))}px` }}
+                        className="font-black text-slate-900 tracking-wider text-center truncate mb-0.5 uppercase"
+                      >
+                        {elem.qr_label}
+                      </div>
+                    )}
+                    <div className="flex-1 flex items-center justify-center w-full min-h-0">
+                      <QRCodeSVG
+                        value={
+                          elem.qr_content ||
+                          (currentCompetitor?.wca_id
+                            ? `https://www.worldcubeassociation.org/persons/${currentCompetitor.wca_id}`
+                            : "https://live.worldcubeassociation.org")
+                        }
+                        size={Math.max(10, Math.min(elemWPx - 8, elemHPx - (elem.qr_label ? 16 : 8)))}
+                        level="M"
+                      />
+                    </div>
+                    {elem.qr_label && elem.qr_label_position === "bottom" && (
+                      <div
+                        style={{ fontSize: `${Math.max(6, Math.min(11, elemWPx * 0.11))}px` }}
+                        className="font-black text-slate-900 tracking-wider text-center truncate mt-0.5 uppercase"
+                      >
+                        {elem.qr_label}
+                      </div>
+                    )}
+                  </div>
+                ) : elem.type === "schedule" ? (
+                  <div className="w-full h-full pointer-events-none">
+                    <ScheduleTable
+                      widthPx={elemWPx}
+                      heightPx={elemHPx}
+                      scale={scale}
+                      competitor={currentCompetitor}
+                      title={elem.schedule_title}
+                      customData={elem.schedule_data}
+                    />
                   </div>
                 ) : (
                   <div

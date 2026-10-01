@@ -40,6 +40,7 @@ class WCARegistrationItem(BaseModel):
     status: str  # "accepted", "pending", "deleted", "rejected"
     selected: bool = True
     competition_id: str
+    avatar_url: Optional[str] = None
 
 
 class WCARegistrationsCategorized(BaseModel):

@@ -7,6 +7,9 @@ import { AppearanceInspector } from "../properties/AppearanceInspector";
 import { PositionInspector } from "../properties/PositionInspector";
 import { RoleInspector } from "../properties/RoleInspector";
 import { FlagInspector } from "../properties/FlagInspector";
+import { AvatarInspector } from "../properties/AvatarInspector";
+import { QrCodeInspector } from "../properties/QrCodeInspector";
+import { ScheduleInspector } from "../properties/ScheduleInspector";
 
 interface RightPanelProps {
   selectedElement: BadgeElement | null;
@@ -71,6 +74,12 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         return "Role Management";
       case "flag":
         return "Country Flag (SVG)";
+      case "avatar":
+        return "Competitor Photo (WCA)";
+      case "qr_code":
+        return "QR Code & Label";
+      case "schedule":
+        return "Competition Schedule";
       default:
         return "Element Properties";
     }
@@ -78,6 +87,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
   const isRole = selectedElement.type === "role";
   const isFlag = selectedElement.type === "flag";
+  const isAvatar = selectedElement.type === "avatar";
+  const isQr = selectedElement.type === "qr_code";
+  const isSchedule = selectedElement.type === "schedule";
 
   return (
     <aside className="w-80 bg-white border-l border-slate-200 flex flex-col h-[calc(100vh-4rem)] overflow-y-auto select-none p-5 space-y-5">
@@ -131,8 +143,69 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         />
       )}
 
+      {/* Competitor Avatar/Photo mode */}
+      {isAvatar && (
+        <AvatarInspector
+          position={selectedElement.position}
+          opacity={selectedElement.opacity ?? 1.0}
+          borderRadiusMm={selectedElement.border_radius_mm ?? 4}
+          borderWidthMm={selectedElement.border_width_mm ?? 0}
+          borderColor={selectedElement.border_color ?? "#cbd5e1"}
+          badgeDimensions={badgeDimensions}
+          onChangePosition={(patch) =>
+            onUpdateElement({
+              position: { ...selectedElement.position, ...patch },
+            })
+          }
+          onChangeOpacity={(opacity) => onUpdateElement({ opacity })}
+          onChangeRadius={(border_radius_mm) => onUpdateElement({ border_radius_mm })}
+          onChangeBorder={(border_width_mm, border_color) =>
+            onUpdateElement({ border_width_mm, border_color })
+          }
+          onLayerChange={onLayerChange}
+        />
+      )}
+
+      {/* QR Code with Label mode */}
+      {isQr && (
+        <QrCodeInspector
+          position={selectedElement.position}
+          opacity={selectedElement.opacity ?? 1.0}
+          qrContent={selectedElement.qr_content}
+          qrLabel={selectedElement.qr_label}
+          qrLabelPosition={selectedElement.qr_label_position}
+          badgeDimensions={badgeDimensions}
+          onChangePosition={(patch) =>
+            onUpdateElement({
+              position: { ...selectedElement.position, ...patch },
+            })
+          }
+          onChangeOpacity={(opacity) => onUpdateElement({ opacity })}
+          onChangeQr={(patch) => onUpdateElement(patch)}
+          onLayerChange={onLayerChange}
+        />
+      )}
+
+      {/* Competition Schedule mode */}
+      {isSchedule && (
+        <ScheduleInspector
+          position={selectedElement.position}
+          opacity={selectedElement.opacity ?? 1.0}
+          scheduleTitle={selectedElement.schedule_title}
+          badgeDimensions={badgeDimensions}
+          onChangePosition={(patch) =>
+            onUpdateElement({
+              position: { ...selectedElement.position, ...patch },
+            })
+          }
+          onChangeOpacity={(opacity) => onUpdateElement({ opacity })}
+          onChangeTitle={(schedule_title) => onUpdateElement({ schedule_title })}
+          onLayerChange={onLayerChange}
+        />
+      )}
+
       {/* Text Elements mode (Name, WCA ID, Competition ID) with Style and Position Tabs */}
-      {!isRole && !isFlag && selectedElement.style && (
+      {!isRole && !isFlag && !isAvatar && !isQr && !isSchedule && selectedElement.style && (
         <div className="space-y-4">
           {/* Tab Selector */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">

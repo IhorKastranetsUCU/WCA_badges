@@ -385,12 +385,17 @@ async def get_competition_registrations_categorized(
                         name = p.get("name") or "Competitor"
                         wca_id = p.get("wcaId")
                         country = p.get("countryIso2") or "UA"
+                        reg_id = p.get("registrantId")
+                        avatar_obj = p.get("avatar") or {}
+                        avatar_url = avatar_obj.get("url") or avatar_obj.get("thumbUrl")
 
                         raw_records.append({
                             "raw_name": name,
                             "wca_id": wca_id,
                             "country": country,
                             "status": st,
+                            "registrant_id": reg_id,
+                            "avatar_url": avatar_url,
                         })
                     # Found and parsed WCIF persons
                     break
@@ -416,12 +421,15 @@ async def get_competition_registrations_categorized(
         iso2, full_name = resolve_country_iso2(country_str)
         status = str(item.get("status", "accepted")).lower()
 
+        # Preserve official WCA registrant ID
+        reg_num = item.get("registrant_id") or idx
+
         # Both accepted and waitlist (pending) are pre-selected so organizers can import either tab directly
         is_selected = status in ["pending", "waitlist", "waiting_list", "accepted", "approved"]
 
         reg_item = WCARegistrationItem(
-            id=f"wca-reg-{competition_id}-{idx}",
-            user_id=idx,
+            id=f"wca-reg-{competition_id}-{reg_num}",
+            user_id=reg_num,
             name_latin=latin,
             name_local=local,
             name_raw=raw_name,
@@ -431,6 +439,7 @@ async def get_competition_registrations_categorized(
             status=status,
             selected=is_selected,
             competition_id=competition_id,
+            avatar_url=item.get("avatar_url") or None,
         )
 
         if status in ["accepted", "approved"]:

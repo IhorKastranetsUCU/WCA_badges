@@ -32,7 +32,7 @@ class ElementStyle(BaseModel):
 
 class BadgeElement(BaseModel):
     id: str
-    type: Literal["name", "wca_id", "flag", "competition_id", "role"]
+    type: Literal["name", "wca_id", "flag", "competition_id", "role", "avatar", "qr_code", "schedule"]
     enabled: bool = True
     position: ElementPosition
     style: Optional[ElementStyle] = None
@@ -41,6 +41,11 @@ class BadgeElement(BaseModel):
     format_prefix: Optional[str] = ""
     format_suffix: Optional[str] = ""
     opacity: Optional[float] = 1.0
+    qr_content: Optional[str] = None
+    qr_label: Optional[str] = None
+    qr_label_position: Optional[Literal["top", "bottom", "none"]] = "bottom"
+    schedule_title: Optional[str] = None
+    schedule_data: Optional[Any] = None
 
 
 class BadgeDimensions(BaseModel):
@@ -80,6 +85,9 @@ class BadgeTemplateUpdate(BaseModel):
 class ExportPDFRequest(BaseModel):
     template_id: Optional[str] = "current"
     side: Literal["front", "back", "both"] = "front"
+    paper_size: Literal["A4", "A5", "Letter", "Legal", "Single"] = "A4"
+    parity: Literal["front_even", "front_odd"] = "front_even"
+    crop_marks: bool = True
     template_override: Optional[Dict[str, Any]] = None
     competitors: Optional[List[Dict[str, Any]]] = None
     roles: Optional[List[Dict[str, Any]]] = None

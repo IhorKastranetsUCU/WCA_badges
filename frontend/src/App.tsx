@@ -10,6 +10,7 @@ import { RightPanel } from "@/components/editor/RightPanel";
 import { WcaImportModal } from "@/components/wca/WcaImportModal";
 import { WcaProfileModal } from "@/components/wca/WcaProfileModal";
 import { AddCustomAttendeeModal } from "@/components/wca/AddCustomAttendeeModal";
+import { ExportPdfModal } from "@/components/editor/ExportPdfModal";
 import { parseClientCsv } from "@/utils/csvParser";
 import { exportBadges } from "@/utils/pdfExport";
 import { getApiUrl } from "@/api/config";
@@ -228,6 +229,119 @@ const INITIAL_FRONT_ELEMENTS: BadgeElement[] = [
   },
 ];
 
+const INITIAL_BACK_ELEMENTS: BadgeElement[] = [
+  {
+    id: "elem-back-comp-id",
+    type: "competition_id",
+    enabled: true,
+    format_mode: "prefix_label",
+    format_prefix: "COMP ID: ",
+    position: { x_mm: 3.0, y_mm: 5.0, width_mm: 20.0, height_mm: 8.0, rotation_deg: 0, z_index: 2 },
+    style: {
+      font_family: "Inter",
+      font_size: 11,
+      font_weight: "700",
+      italic: false,
+      uppercase: true,
+      text_align: "left",
+      letter_spacing_mm: 0.0,
+      text_color: "#111827",
+      has_background: false,
+      background_color: "#FFFFFF",
+      border_radius: 0,
+      border_width: 0,
+      border_color: "#000000",
+      opacity: 1.0,
+      padding_mm: 0,
+    },
+  },
+  {
+    id: "elem-back-wca-id",
+    type: "wca_id",
+    enabled: true,
+    format_mode: "prefix_label",
+    format_prefix: "WCA ID: ",
+    position: { x_mm: 3.0, y_mm: 15.0, width_mm: 20.0, height_mm: 8.0, rotation_deg: 0, z_index: 2 },
+    style: {
+      font_family: "Inter",
+      font_size: 10,
+      font_weight: "700",
+      italic: false,
+      uppercase: true,
+      text_align: "left",
+      letter_spacing_mm: 0.0,
+      text_color: "#111827",
+      has_background: false,
+      background_color: "#FFFFFF",
+      border_radius: 0,
+      border_width: 0,
+      border_color: "#000000",
+      opacity: 1.0,
+      padding_mm: 0,
+    },
+  },
+  {
+    id: "elem-back-schedule",
+    type: "schedule",
+    enabled: true,
+    schedule_title: "",
+    position: { x_mm: 24.0, y_mm: 3.0, width_mm: 73.0, height_mm: 44.0, rotation_deg: 0, z_index: 1 },
+    opacity: 1.0,
+  },
+  {
+    id: "elem-back-qr-live",
+    type: "qr_code",
+    enabled: true,
+    qr_content: "https://live.worldcubeassociation.org",
+    qr_label: "LIVE RESULTS",
+    qr_label_position: "bottom",
+    position: { x_mm: 4.0, y_mm: 47.0, width_mm: 26.0, height_mm: 20.0, rotation_deg: 0, z_index: 3 },
+    opacity: 1.0,
+  },
+  {
+    id: "elem-back-qr-groups",
+    type: "qr_code",
+    enabled: true,
+    qr_content: "https://competitiongroups.com",
+    qr_label: "GROUPS:",
+    qr_label_position: "top",
+    position: { x_mm: 69.0, y_mm: 46.0, width_mm: 27.0, height_mm: 21.0, rotation_deg: 0, z_index: 3 },
+    opacity: 1.0,
+  },
+];
+
+const PROTOTYPE_ELEMENTS: Record<string, Partial<BadgeElement>> = {
+  flag: INITIAL_FRONT_ELEMENTS[0],
+  name: INITIAL_FRONT_ELEMENTS[1],
+  wca_id: INITIAL_FRONT_ELEMENTS[2],
+  role: INITIAL_FRONT_ELEMENTS[3],
+  competition_id: INITIAL_FRONT_ELEMENTS[4],
+  avatar: {
+    type: "avatar",
+    enabled: true,
+    position: { x_mm: 8.0, y_mm: 8.0, width_mm: 16.0, height_mm: 16.0, rotation_deg: 0, z_index: 3 },
+    border_radius_mm: 8.0,
+    border_width_mm: 0.5,
+    border_color: "#94A3B8",
+    opacity: 1.0,
+  },
+  qr_code: {
+    type: "qr_code",
+    enabled: true,
+    qr_content: "https://live.worldcubeassociation.org",
+    qr_label: "LIVE RESULTS",
+    qr_label_position: "top",
+    position: { x_mm: 74.0, y_mm: 46.0, width_mm: 20.0, height_mm: 20.0, rotation_deg: 0, z_index: 3 },
+    opacity: 1.0,
+  },
+  schedule: {
+    type: "schedule",
+    enabled: true,
+    position: { x_mm: 5.0, y_mm: 10.0, width_mm: 90.0, height_mm: 55.0, rotation_deg: 0, z_index: 2 },
+    opacity: 1.0,
+  },
+};
+
 export const App: React.FC = () => {
   const [template, setTemplate] = useState<BadgeTemplate>({
     id: "current",
@@ -236,7 +350,7 @@ export const App: React.FC = () => {
     dimensions: { preset: "100x70", width_mm: 100.0, height_mm: 70.0 },
     sides: {
       front: { background_url: null, elements: INITIAL_FRONT_ELEMENTS },
-      back: { background_url: null, elements: [] },
+      back: { background_url: null, elements: INITIAL_BACK_ELEMENTS },
     },
   });
 
@@ -270,6 +384,7 @@ export const App: React.FC = () => {
   const [isWcaModalOpen, setIsWcaModalOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState<boolean>(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
 
   // Direct WCA OAuth login trigger
   const handleWcaOAuthLogin = async () => {
@@ -388,15 +503,18 @@ export const App: React.FC = () => {
   const selectedElement =
     currentSideConfig.elements.find((e) => e.id === selectedElementId) || null;
 
-  const enabledFields = {
+  const enabledFields: Record<string, boolean> = {
     name: currentSideConfig.elements.some((e) => e.type === "name" && e.enabled),
     wca_id: currentSideConfig.elements.some((e) => e.type === "wca_id" && e.enabled),
     flag: currentSideConfig.elements.some((e) => e.type === "flag" && e.enabled),
     competition_id: currentSideConfig.elements.some((e) => e.type === "competition_id" && e.enabled),
     role: currentSideConfig.elements.some((e) => e.type === "role" && e.enabled),
+    avatar: currentSideConfig.elements.some((e) => e.type === "avatar" && e.enabled),
+    qr_code: currentSideConfig.elements.some((e) => e.type === "qr_code" && e.enabled),
+    schedule: currentSideConfig.elements.some((e) => e.type === "schedule" && e.enabled),
   };
 
-  const handleToggleField = (fieldType: "name" | "wca_id" | "flag" | "competition_id" | "role") => {
+  const handleToggleField = (fieldType: string) => {
     setTemplate((prev) => {
       const side = prev.sides[currentSide];
       const existing = side.elements.find((e) => e.type === fieldType);
@@ -407,9 +525,12 @@ export const App: React.FC = () => {
           e.id === existing.id ? { ...e, enabled: !e.enabled } : e
         );
       } else {
-        const proto = INITIAL_FRONT_ELEMENTS.find((e) => e.type === fieldType);
+        const proto = PROTOTYPE_ELEMENTS[fieldType];
         if (proto) {
-          updatedElements = [...side.elements, { ...proto, id: `elem-${fieldType}-${Date.now()}`, enabled: true }];
+          updatedElements = [
+            ...side.elements,
+            { ...proto, id: `elem-${fieldType}-${Date.now()}`, enabled: true } as BadgeElement,
+          ];
         } else {
           updatedElements = side.elements;
         }
@@ -656,7 +777,7 @@ export const App: React.FC = () => {
   const handleGenerateBadges = async () => {
     setIsGenerating(true);
     try {
-      await exportBadges(template, competitors, roles, currentSide);
+      await exportBadges(template, competitors, roles, { side: currentSide });
     } finally {
       setIsGenerating(false);
     }
@@ -668,7 +789,7 @@ export const App: React.FC = () => {
       <TopNav
         currentSide={currentSide}
         onSideChange={setCurrentSide}
-        onGenerate={handleGenerateBadges}
+        onGenerate={() => setIsExportModalOpen(true)}
         isGenerating={isGenerating}
         wcaProfile={wcaProfile}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
@@ -779,6 +900,22 @@ export const App: React.FC = () => {
         onClose={() => setIsAddCustomModalOpen(false)}
         roles={roles}
         onAddCompetitor={handleAddCustomCompetitor}
+      />
+
+      {/* Multi-Paper & Duplex PDF Export Modal */}
+      <ExportPdfModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={async (options) => {
+          setIsGenerating(true);
+          try {
+            await exportBadges(template, competitors, roles, options);
+          } finally {
+            setIsGenerating(false);
+          }
+        }}
+        dimensions={template.dimensions}
+        totalCompetitors={competitors.length}
       />
     </div>
   );

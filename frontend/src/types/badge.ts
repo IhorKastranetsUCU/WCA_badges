@@ -1,4 +1,4 @@
-export type ElementType = "name" | "wca_id" | "flag" | "competition_id" | "role";
+export type ElementType = "name" | "wca_id" | "flag" | "competition_id" | "role" | "avatar" | "qr_code" | "schedule";
 
 export type NameDisplayMode = "latin_only" | "local_only" | "both";
 export type FormatMode = "raw" | "prefix_label" | "custom";
@@ -42,6 +42,14 @@ export interface BadgeElement {
   format_prefix?: string;
   format_suffix?: string;
   opacity?: number;
+  border_radius_mm?: number;
+  border_width_mm?: number;
+  border_color?: string;
+  qr_content?: string;
+  qr_label?: string;
+  qr_label_position?: "top" | "bottom" | "none";
+  schedule_title?: string;
+  schedule_data?: any;
 }
 
 export interface BadgeDimensions {

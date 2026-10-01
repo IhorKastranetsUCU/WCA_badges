@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,6 +8,7 @@ import {
   Check,
   Trophy,
   UserPlus,
+  Search,
 } from "lucide-react";
 import { BadgeDimensions, BadgePreset } from "@/types/badge";
 import { Competitor } from "@/types/competitor";
@@ -22,14 +23,8 @@ interface LeftPanelProps {
   onBackgroundUpload: (file: File) => void;
   onOpenWcaModal: () => void;
   onOpenAddCustomModal: () => void;
-  enabledFields: {
-    name: boolean;
-    wca_id: boolean;
-    flag: boolean;
-    competition_id: boolean;
-    role: boolean;
-  };
-  onToggleField: (field: "name" | "wca_id" | "flag" | "competition_id" | "role") => void;
+  enabledFields: Record<string, boolean>;
+  onToggleField: (field: any) => void;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -47,6 +42,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 }) => {
   const csvInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
   const handlePresetChange = (preset: BadgePreset) => {
     let w = dimensions.width_mm;
@@ -71,9 +68,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   };
 
   const handleCustomDimension = (axis: "w" | "h", value: number) => {
-    const clamped = Math.min(200, Math.max(20, value || 20));
+    if (isNaN(value)) return;
+    const clamped = Math.max(20, Math.min(200, value));
     onDimensionsChange({
-      ...dimensions,
       preset: "Custom",
       width_mm: axis === "w" ? clamped : dimensions.width_mm,
       height_mm: axis === "h" ? clamped : dimensions.height_mm,
@@ -82,6 +79,23 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
   const total = competitors.length;
   const current = total > 0 ? currentParticipantIndex + 1 : 0;
+
+  // Filtered competitors for quick search jump
+  const searchResults = searchQuery.trim()
+    ? competitors
+        .map((c, idx) => ({ comp: c, idx }))
+        .filter(({ comp }) => {
+          const q = searchQuery.toLowerCase();
+          return (
+            comp.name_latin.toLowerCase().includes(q) ||
+            (comp.name_local && comp.name_local.toLowerCase().includes(q)) ||
+            (comp.wca_id && comp.wca_id.toLowerCase().includes(q)) ||
+            String(comp.csv_index).includes(q) ||
+            comp.id.toLowerCase().includes(q)
+          );
+        })
+        .slice(0, 8)
+    : [];
 
   return (
     <aside className="w-80 bg-white border-r border-slate-200 flex flex-col h-[calc(100vh-4rem)] overflow-y-auto select-none p-5 space-y-6">
@@ -101,13 +115,41 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             </div>
             <div className="text-left">
               <div className="text-xs font-bold">WCA Competition Import</div>
-              <div className="text-[10px] text-blue-100">Approved, Pending & Waitlist</div>
             </div>
           </div>
           <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/20 text-white">
             LIVE
           </span>
         </button>
+
+        {/* CSV File Dropzone / Button directly below WCA Competition Import */}
+        <div
+          onClick={() => csvInputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files?.[0]) onCsvUpload(e.dataTransfer.files[0]);
+          }}
+          className="group border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 rounded-xl p-2.5 flex items-center gap-2.5 transition-all cursor-pointer"
+        >
+          <input
+            type="file"
+            ref={csvInputRef}
+            onChange={(e) => e.target.files?.[0] && onCsvUpload(e.target.files[0])}
+            accept=".csv,text/csv"
+            className="hidden"
+          />
+          <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold text-slate-800">Upload WCA CSV</div>
+            <div className="text-[10px] text-slate-400 truncate">
+              {total > 0 ? `${total} participants loaded` : "Select or drop CSV file"}
+            </div>
+          </div>
+          <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500" />
+        </div>
 
         {/* Add Custom Person Button */}
         <button
@@ -145,38 +187,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           </div>
           <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500" />
         </div>
-
-        {/* CSV File Dropzone */}
-        <div
-          onClick={() => csvInputRef.current?.click()}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            if (e.dataTransfer.files?.[0]) onCsvUpload(e.dataTransfer.files[0]);
-          }}
-          className="group border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 rounded-xl p-2.5 flex items-center gap-2.5 transition-all cursor-pointer"
-        >
-          <input
-            type="file"
-            ref={csvInputRef}
-            onChange={(e) => e.target.files?.[0] && onCsvUpload(e.target.files[0])}
-            accept=".csv,text/csv"
-            className="hidden"
-          />
-          <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-            <FileText className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-slate-800">Or Upload WCA CSV</div>
-            <div className="text-[10px] text-slate-400 truncate">
-              {total > 0 ? `${total} loaded` : "Local CSV file"}
-            </div>
-          </div>
-          <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500" />
-        </div>
       </section>
 
-      {/* 2. Participant Navigation Controls & Counter */}
+      {/* 2. Participant Navigation Controls & Search */}
       <section className="space-y-3 pt-2 border-t border-slate-100">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Participant Preview</h2>
@@ -185,6 +198,53 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           </span>
         </div>
 
+        {/* Search by Name, ID, or WCA ID */}
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by Name, ID, or WCA ID..."
+            value={searchQuery}
+            onFocus={() => setIsSearchOpen(true)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setIsSearchOpen(true);
+            }}
+            className="w-full text-xs pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
+          {/* Quick Search Results Dropdown */}
+          {isSearchOpen && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-30 max-h-48 overflow-y-auto">
+              {searchResults.map(({ comp, idx }) => (
+                <button
+                  key={comp.id}
+                  type="button"
+                  onClick={() => {
+                    onParticipantChange(idx);
+                    setSearchQuery("");
+                    setIsSearchOpen(false);
+                  }}
+                  className={`w-full text-left p-2 text-xs hover:bg-blue-50 transition-colors flex items-center justify-between border-b border-slate-100 last:border-0 ${
+                    idx === currentParticipantIndex ? "bg-blue-50 font-bold" : ""
+                  }`}
+                >
+                  <div className="truncate mr-2">
+                    <div className="text-slate-800 truncate">{comp.name_latin}</div>
+                    <div className="text-[10px] text-slate-400">
+                      ID: #{comp.registrant_id ?? comp.csv_index ?? idx + 1} • {comp.wca_id || "Newcomer"}
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 bg-slate-100 rounded">
+                    {comp.country_iso2 || "UA"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Attendee Navigation Card */}
         <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
           <button
             type="button"
@@ -199,8 +259,10 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             <div className="text-xs font-bold text-slate-800 truncate">
               {competitors[currentParticipantIndex]?.name_latin || "No participants"}
             </div>
-            <div className="text-[10px] text-slate-400 truncate">
-              {competitors[currentParticipantIndex]?.wca_id || "Newcomer"} • {competitors[currentParticipantIndex]?.country_iso2 || "UA"}
+            <div className="text-[10px] text-slate-500 font-medium truncate">
+              ID: #{competitors[currentParticipantIndex]?.registrant_id ?? competitors[currentParticipantIndex]?.csv_index ?? 1} •{" "}
+              {competitors[currentParticipantIndex]?.wca_id || "Newcomer"} •{" "}
+              {competitors[currentParticipantIndex]?.country_iso2 || "UA"}
             </div>
           </div>
 
@@ -263,7 +325,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
         )}
       </section>
 
-      {/* 4. CSV Field Visibility Toggles */}
+      {/* 4. Badge Components Toggles */}
       <section className="space-y-3 pt-2 border-t border-slate-100">
         <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Badge Components</h2>
         <div className="space-y-1.5">
@@ -274,9 +336,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
               { key: "flag", label: "Country Flag (SVG)" },
               { key: "competition_id", label: "Competition ID" },
               { key: "role", label: "Role Badge" },
+              { key: "avatar", label: "Competitor Photo (WCA)" },
+              { key: "qr_code", label: "QR Code with Label" },
+              { key: "schedule", label: "Competition Schedule Table" },
             ] as const
           ).map((item) => {
-            const isActive = enabledFields[item.key];
+            const isActive = !!enabledFields[item.key];
             return (
               <button
                 key={item.key}

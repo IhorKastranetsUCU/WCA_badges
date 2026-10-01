@@ -36,6 +36,7 @@ export interface WCARegistrationItem {
   status: "accepted" | "pending" | "deleted" | "rejected" | string;
   selected: boolean;
   competition_id: string;
+  avatar_url?: string | null;
 }
 
 export interface WCARegistrationsCategorized {

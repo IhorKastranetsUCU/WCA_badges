@@ -48,6 +48,18 @@ export function parseClientCsv(csvText: string): Competitor[] {
   const wcaIdIdx = header.findIndex((h) => h.includes("wca"));
   const countryIdx = header.findIndex((h) => h.includes("country") || h.includes("citizen"));
 
+  // Detect official WCA Registrant Id column (e.g. "Registrant Id", "comp id", "id")
+  const regIdIdx = header.findIndex(
+    (h) =>
+      h === "registrant id" ||
+      h === "registrant_id" ||
+      h === "registrantid" ||
+      h === "comp id" ||
+      h === "comp_id" ||
+      h === "bib" ||
+      h === "id"
+  );
+
   const statusIndices: number[] = [];
   header.forEach((h, idx) => {
     if (h.includes("status") || h.includes("competing") || h.includes("registration") || h.includes("state")) {
@@ -123,9 +135,18 @@ export function parseClientCsv(csvText: string): Competitor[] {
       iso2 = countryName.toUpperCase();
     }
 
+    let competitorIdNum: number | null = null;
+    if (regIdIdx !== -1 && cols[regIdIdx]) {
+      const parsed = parseInt(cols[regIdIdx].trim(), 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        competitorIdNum = parsed;
+      }
+    }
+    const finalIdNum = competitorIdNum !== null ? competitorIdNum : seq;
+
     competitors.push({
-      id: `comp-${seq}`,
-      csv_index: seq,
+      id: `comp-${finalIdNum}`,
+      csv_index: finalIdNum,
       name_latin: latin,
       name_local: local,
       name_raw: rawName,

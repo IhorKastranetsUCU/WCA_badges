@@ -25,19 +25,24 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
   onOpenProfileModal,
 }) => {
   const [selectedCompId, setSelectedCompId] = useState<string>("");
-  const [customCompId, setCustomCompId] = useState<string>("");
   const [isLoadingRegs, setIsLoadingRegs] = useState<boolean>(false);
   const [categorized, setCategorized] = useState<WCARegistrationsCategorized | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<"pending" | "approved" | "cancelled">("pending");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  // Separate competitions into actual/upcoming and archive
+  const todayStr = new Date().toISOString().split("T")[0];
+  const activeCompetitions = competitions.filter((c) => !c.end_date || c.end_date >= todayStr);
+  const archiveCompetitions = competitions.filter((c) => c.end_date && c.end_date < todayStr);
+
   // Initialize selected competition when modal opens or competitions change
   useEffect(() => {
     if (isOpen && competitions.length > 0 && !selectedCompId) {
-      setSelectedCompId(competitions[0].id);
+      const firstActive = activeCompetitions.length > 0 ? activeCompetitions[0] : competitions[0];
+      setSelectedCompId(firstActive.id);
     }
-  }, [isOpen, competitions, selectedCompId]);
+  }, [isOpen, competitions, selectedCompId, activeCompetitions]);
 
   // Load registrations when selected competition changes
   useEffect(() => {
@@ -98,14 +103,6 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
     });
   };
 
-  const handleCustomCompSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customCompId.trim()) {
-      setSelectedCompId(customCompId.trim());
-      setCustomCompId("");
-    }
-  };
-
   const approvedSelected = categorized?.approved.filter((r) => r.selected).length || 0;
   const pendingSelected = categorized?.pending.filter((r) => r.selected).length || 0;
   const cancelledSelected = categorized?.cancelled.filter((r) => r.selected).length || 0;
@@ -159,17 +156,22 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
       // Fallback client-side
     }
 
-    const fallbackComps: Competitor[] = selectedToImport.map((reg, idx) => ({
-      id: `wca-${idx + 1}`,
-      csv_index: idx + 1,
-      name_latin: reg.name_latin,
-      name_local: reg.name_local,
-      name_raw: reg.name_raw,
-      wca_id: reg.wca_id,
-      country_iso2: reg.country_iso2,
-      country_name: reg.country_name,
-      role_id: "r-participant",
-    }));
+    const fallbackComps: Competitor[] = selectedToImport.map((reg, idx) => {
+      const regIdNum = reg.user_id || idx + 1;
+      return {
+        id: `wca-${regIdNum}`,
+        csv_index: regIdNum,
+        registrant_id: regIdNum,
+        name_latin: reg.name_latin,
+        name_local: reg.name_local,
+        name_raw: reg.name_raw,
+        wca_id: reg.wca_id,
+        country_iso2: reg.country_iso2,
+        country_name: reg.country_name,
+        avatar_url: reg.avatar_url || null,
+        role_id: "r-participant",
+      };
+    });
 
     onImportCompetitors(fallbackComps);
     onClose();
@@ -229,42 +231,33 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
               <select
                 value={selectedCompId}
                 onChange={(e) => setSelectedCompId(e.target.value)}
-                className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
-                {competitions.map((comp) => (
-                  <option key={comp.id} value={comp.id}>
-                    {comp.name} ({comp.city}) — Role: {comp.user_roles?.join(" & ") || "Organizer"}
-                  </option>
-                ))}
+                {activeCompetitions.length > 0 && (
+                  <optgroup label="⚡ Active & Upcoming Competitions">
+                    {activeCompetitions.map((comp) => (
+                      <option key={comp.id} value={comp.id}>
+                        {comp.name} ({comp.city}) — Role: {comp.user_roles?.join(" & ") || "Organizer"}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {archiveCompetitions.length > 0 && (
+                  <optgroup label="📁 Archive (Past Competitions)">
+                    {archiveCompetitions.map((comp) => (
+                      <option key={comp.id} value={comp.id}>
+                        {comp.name} ({comp.city}) — Role: {comp.user_roles?.join(" & ") || "Organizer"}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             ) : (
               <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                No managed competitions found. Connect your profile or enter an ID below.
+                No managed competitions found. Connect your profile to load your competitions.
               </div>
             )}
           </div>
-
-          {/* Or search custom competition ID */}
-          <form onSubmit={handleCustomCompSubmit} className="flex items-end gap-1.5 min-w-[200px]">
-            <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                Lookup Competition ID
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. UkrainianNationals2026"
-                value={customCompId}
-                onChange={(e) => setCustomCompId(e.target.value)}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all cursor-pointer"
-            >
-              Load
-            </button>
-          </form>
         </div>
 
         {/* Category Tabs: Waiting List (Pending), Approved, Cancelled */}

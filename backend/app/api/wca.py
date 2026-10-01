@@ -148,8 +148,9 @@ async def import_selected_registrations(
 
     created = []
     for idx, reg in enumerate(selected_items, 1):
+        final_id = reg.user_id if (reg.user_id and reg.user_id > 0) else idx
         comp = Competitor(
-            csv_index=idx,
+            csv_index=final_id,
             name_latin=reg.name_latin,
             name_local=reg.name_local,
             name_raw=reg.name_raw,
