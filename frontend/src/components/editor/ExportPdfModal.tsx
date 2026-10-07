@@ -715,6 +715,9 @@ export const ExportPdfModal: React.FC<ExportPdfModalProps> = ({
                       >
                         <div
                           style={{
+                            width: `${dimensions.width_mm * effectiveScale}px`,
+                            height: `${dimensions.height_mm * effectiveScale}px`,
+                            flexShrink: 0,
                             transform: rotateDeg !== 0 ? `rotate(${rotateDeg}deg)` : undefined,
                             transformOrigin: "center center",
                           }}

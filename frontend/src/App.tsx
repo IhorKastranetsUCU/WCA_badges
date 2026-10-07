@@ -387,6 +387,8 @@ export const App: React.FC = () => {
   const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [competitionSchedule, setCompetitionSchedule] = useState<any>(null);
+  const [isUploadingAssignments, setIsUploadingAssignments] = useState<boolean>(false);
+  const [assignmentStatusMessage, setAssignmentStatusMessage] = useState<string | null>(null);
 
   // Direct WCA OAuth login trigger
   const handleWcaOAuthLogin = async () => {
@@ -695,6 +697,243 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleDimensionsChange = (newDims: BadgeDimensions) => {
+    setTemplate((prev) => {
+      const oldW = prev.dimensions.width_mm || 100;
+      const oldH = prev.dimensions.height_mm || 70;
+      const scaleX = newDims.width_mm / oldW;
+      const scaleY = newDims.height_mm / oldH;
+
+      const scaleElements = (elements: BadgeElement[]) =>
+        elements.map((el) => {
+          // If switching to A6 (105x148 portrait)
+          if (newDims.preset === "A6" && prev.dimensions.preset !== "A6") {
+            if (el.type === "schedule") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 5.0,
+                  y_mm: 5.0,
+                  width_mm: 95.0,
+                  height_mm: 108.0,
+                  rotation_deg: el.position.rotation_deg,
+                  z_index: el.position.z_index,
+                },
+              };
+            }
+            if (el.id === "elem-back-qr-live") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 8.0,
+                  y_mm: 116.0,
+                  width_mm: 38.0,
+                  height_mm: 26.0,
+                  rotation_deg: 0,
+                  z_index: 3,
+                },
+              };
+            }
+            if (el.id === "elem-back-qr-groups") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 59.0,
+                  y_mm: 116.0,
+                  width_mm: 38.0,
+                  height_mm: 26.0,
+                  rotation_deg: 0,
+                  z_index: 3,
+                },
+              };
+            }
+            if (el.type === "avatar") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 36.5,
+                  y_mm: 12.0,
+                  width_mm: 32.0,
+                  height_mm: 32.0,
+                  rotation_deg: 0,
+                  z_index: 3,
+                },
+                border_radius_mm: 16.0,
+              };
+            }
+            if (el.type === "flag") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 42.5,
+                  y_mm: 48.0,
+                  width_mm: 20.0,
+                  height_mm: 13.0,
+                  rotation_deg: 0,
+                  z_index: 1,
+                },
+              };
+            }
+            if (el.type === "name") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 5.0,
+                  y_mm: 66.0,
+                  width_mm: 95.0,
+                  height_mm: 18.0,
+                  rotation_deg: 0,
+                  z_index: 2,
+                },
+                style: el.style
+                  ? { ...el.style, font_size: Math.max(el.style.font_size, 22) }
+                  : el.style,
+              };
+            }
+            if (el.type === "wca_id") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 10.0,
+                  y_mm: 88.0,
+                  width_mm: 85.0,
+                  height_mm: 10.0,
+                  rotation_deg: 0,
+                  z_index: 3,
+                },
+              };
+            }
+            if (el.type === "role") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 15.0,
+                  y_mm: 104.0,
+                  width_mm: 75.0,
+                  height_mm: 14.0,
+                  rotation_deg: 0,
+                  z_index: 4,
+                },
+              };
+            }
+          }
+
+          // If switching back from A6 to 100x70 or 90x70
+          if (
+            (newDims.preset === "100x70" || newDims.preset === "90x70") &&
+            prev.dimensions.preset === "A6"
+          ) {
+            const wRatio = newDims.width_mm / 100.0;
+            if (el.type === "schedule") {
+              return {
+                ...el,
+                position: {
+                  x_mm: parseFloat((24.0 * wRatio).toFixed(1)),
+                  y_mm: 3.0,
+                  width_mm: parseFloat((73.0 * wRatio).toFixed(1)),
+                  height_mm: 44.0,
+                  rotation_deg: 0,
+                  z_index: 1,
+                },
+              };
+            }
+            if (el.id === "elem-back-qr-live") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 4.0,
+                  y_mm: 47.0,
+                  width_mm: 26.0,
+                  height_mm: 20.0,
+                  rotation_deg: 0,
+                  z_index: 3,
+                },
+              };
+            }
+            if (el.id === "elem-back-qr-groups") {
+              return {
+                ...el,
+                position: {
+                  x_mm: parseFloat((69.0 * wRatio).toFixed(1)),
+                  y_mm: 46.0,
+                  width_mm: 27.0,
+                  height_mm: 21.0,
+                  rotation_deg: 0,
+                  z_index: 3,
+                },
+              };
+            }
+            if (el.type === "name") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 10.0,
+                  y_mm: 24.0,
+                  width_mm: parseFloat((80.0 * wRatio).toFixed(1)),
+                  height_mm: 12.0,
+                  rotation_deg: 0,
+                  z_index: 2,
+                },
+              };
+            }
+            if (el.type === "wca_id") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 10.0,
+                  y_mm: 39.0,
+                  width_mm: parseFloat((80.0 * wRatio).toFixed(1)),
+                  height_mm: 8.0,
+                  rotation_deg: 0,
+                  z_index: 3,
+                },
+              };
+            }
+            if (el.type === "role") {
+              return {
+                ...el,
+                position: {
+                  x_mm: 20.0,
+                  y_mm: 50.0,
+                  width_mm: parseFloat((60.0 * wRatio).toFixed(1)),
+                  height_mm: 9.0,
+                  rotation_deg: 0,
+                  z_index: 4,
+                },
+              };
+            }
+          }
+
+          // Custom dimension proportional adjustment
+          return {
+            ...el,
+            position: {
+              ...el.position,
+              x_mm: parseFloat((el.position.x_mm * scaleX).toFixed(1)),
+              y_mm: parseFloat((el.position.y_mm * scaleY).toFixed(1)),
+              width_mm: parseFloat((el.position.width_mm * scaleX).toFixed(1)),
+              height_mm: parseFloat((el.position.height_mm * scaleY).toFixed(1)),
+            },
+          };
+        });
+
+      return {
+        ...prev,
+        dimensions: newDims,
+        sides: {
+          front: {
+            ...prev.sides.front,
+            elements: scaleElements(prev.sides.front.elements),
+          },
+          back: {
+            ...prev.sides.back,
+            elements: scaleElements(prev.sides.back.elements),
+          },
+        },
+      };
+    });
+  };
+
   const handleUpdateElement = (patch: Partial<BadgeElement>) => {
     if (!selectedElementId) return;
     setTemplate((prev) => {
@@ -779,6 +1018,103 @@ export const App: React.FC = () => {
         }
       })
       .catch(() => {});
+  };
+
+  const handleUploadAssignmentsPdf = async (file: File) => {
+    try {
+      setIsUploadingAssignments(true);
+      setAssignmentStatusMessage("Parsing competitor cards from PDF...");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(getApiUrl("/api/wca/pdf/upload-assignments"), {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to parse competitor cards PDF");
+      }
+
+      const data = await res.json();
+      const cards = data.cards || [];
+      const byRegId = data.assignments_by_reg_id || {};
+      const byWcaId = data.assignments_by_wca_id || {};
+      const byName = data.assignments_by_name || {};
+
+      let matchedCount = 0;
+      const normalize = (str: string) =>
+        str
+          .toLowerCase()
+          .replace(/[\(\)\[\],]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+      if (competitors.length > 0) {
+        setCompetitors((prev) =>
+          prev.map((c) => {
+            let foundAssign = null;
+            if (c.registrant_id && byRegId[String(c.registrant_id)]) {
+              foundAssign = byRegId[String(c.registrant_id)];
+            } else if (c.wca_id && byWcaId[c.wca_id.toUpperCase()]) {
+              foundAssign = byWcaId[c.wca_id.toUpperCase()];
+            } else {
+              const normLatin = normalize(c.name_latin || "");
+              const normRaw = normalize(c.name_raw || "");
+              for (const [key, val] of Object.entries(byName)) {
+                if (
+                  key === normLatin ||
+                  key === normRaw ||
+                  normLatin.includes(key) ||
+                  key.includes(normLatin)
+                ) {
+                  foundAssign = val;
+                  break;
+                }
+              }
+            }
+
+            if (foundAssign) {
+              matchedCount++;
+              return { ...c, assignments: foundAssign };
+            }
+            return { ...c, assignments: {} };
+          })
+        );
+      } else {
+        const defaultRoleId = roles[0]?.id || "r-participant";
+        const newCompetitors: Competitor[] = cards.map((card: any, idx: number) => ({
+          id: `card-c-${idx + 1}`,
+          csv_index: card.registrant_id || idx + 1,
+          name_latin: card.name.split("(")[0].trim(),
+          name_local: card.name.includes("(")
+            ? card.name.match(/\((.*?)\)/)?.[1] || null
+            : null,
+          name_raw: card.name,
+          wca_id: card.wca_id,
+          country_iso2: "UA",
+          country_name: "Ukraine",
+          role_id: defaultRoleId,
+          registrant_id: card.registrant_id,
+          assignments: card.assignments,
+        }));
+        setCompetitors(newCompetitors);
+        matchedCount = newCompetitors.length;
+      }
+
+      setAssignmentStatusMessage(
+        `Loaded ${data.total_cards} cards! Successfully assigned tasks to ${matchedCount} competitors.`
+      );
+      setTimeout(() => setAssignmentStatusMessage(null), 6000);
+    } catch (err: any) {
+      console.error("PDF assignment upload error:", err);
+      setAssignmentStatusMessage(`Error: ${err.message || "Failed to parse cards"}`);
+      setTimeout(() => setAssignmentStatusMessage(null), 6000);
+    } finally {
+      setIsUploadingAssignments(false);
+    }
   };
 
   const handleBackgroundUpload = (file: File) => {
@@ -1033,7 +1369,7 @@ export const App: React.FC = () => {
         {/* Left Container: General Badge Settings & WCA Import */}
         <LeftPanel
           dimensions={template.dimensions}
-          onDimensionsChange={(dims) => setTemplate((prev) => ({ ...prev, dimensions: dims }))}
+          onDimensionsChange={handleDimensionsChange}
           competitors={competitors}
           currentParticipantIndex={currentParticipantIndex}
           onParticipantChange={setCurrentParticipantIndex}
@@ -1046,6 +1382,9 @@ export const App: React.FC = () => {
           onUploadCompetitorAvatar={handleUploadCompetitorAvatar}
           isFetchingAvatars={isFetchingAvatars}
           onAddAdditionalQrCode={handleAddAdditionalQrCode}
+          onUploadAssignmentsPdf={handleUploadAssignmentsPdf}
+          isUploadingAssignments={isUploadingAssignments}
+          assignmentStatusMessage={assignmentStatusMessage}
         />
 
         {/* Central Container: Badge Preview Canvas */}
@@ -1094,6 +1433,8 @@ export const App: React.FC = () => {
           isFetchingAvatar={isFetchingAvatars}
           onLayerChange={handleLayerChange}
           onAddAdditionalQrCode={handleAddAdditionalQrCode}
+          onUploadAssignmentsPdf={handleUploadAssignmentsPdf}
+          isUploadingAssignments={isUploadingAssignments}
         />
       </div>
 

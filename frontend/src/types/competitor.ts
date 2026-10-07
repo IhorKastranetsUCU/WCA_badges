@@ -10,6 +10,7 @@ export interface Competitor {
   role_id?: string | null;
   avatar_url?: string | null;
   registrant_id?: number | null;
+  assignments?: Record<string, { comp: string[]; scr: string[]; judge: string[]; runner: string[] }> | null;
   created_at?: string;
 }
 

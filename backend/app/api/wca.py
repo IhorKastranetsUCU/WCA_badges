@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -263,3 +263,27 @@ async def import_selected_registrations(
         await db.refresh(c)
 
     return [CompetitorOut.model_validate(c) for c in created]
+
+
+@router.post("/pdf/upload-assignments")
+async def upload_assignments_pdf(
+    file: UploadFile = File(...),
+):
+    """
+    Receives an uploaded Groupifier competitor cards PDF,
+    parses each competitor's assignments for all events,
+    and returns structured assignments keyed by registrant_id, wca_id, and name.
+    """
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Uploaded file must be a PDF")
+
+    try:
+        from app.services.assignment_pdf_parser import parse_competitor_cards_pdf
+
+        contents = await file.read()
+        parsed = parse_competitor_cards_pdf(contents)
+        return parsed
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Failed to parse competitor cards PDF: {str(e)}"
+        )

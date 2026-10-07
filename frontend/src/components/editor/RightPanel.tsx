@@ -33,6 +33,8 @@ interface RightPanelProps {
   isFetchingAvatar?: boolean;
   onLayerChange: (action: "bring_to_front" | "send_to_back" | "move_up" | "move_down") => void;
   onAddAdditionalQrCode?: () => void;
+  onUploadAssignmentsPdf?: (file: File) => void;
+  isUploadingAssignments?: boolean;
 }
 
 export const RightPanel: React.FC<RightPanelProps> = ({
@@ -57,6 +59,8 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   isFetchingAvatar = false,
   onLayerChange,
   onAddAdditionalQrCode,
+  onUploadAssignmentsPdf,
+  isUploadingAssignments = false,
 }) => {
   const [activeTab, setActiveTab] = useState<"style" | "position">("style");
 
@@ -219,6 +223,8 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           onChangeOpacity={(opacity) => onUpdateElement({ opacity })}
           onChangeTitle={(schedule_title) => onUpdateElement({ schedule_title })}
           onLayerChange={onLayerChange}
+          onUploadAssignmentsPdf={onUploadAssignmentsPdf}
+          isUploadingAssignments={isUploadingAssignments}
         />
       )}
 

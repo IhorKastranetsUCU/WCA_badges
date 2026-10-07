@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import base64
 import logging
 from typing import Any, Dict, List, Optional, Tuple
@@ -86,6 +87,18 @@ def _ensure_fonts_registered():
                 FONT_BOLD = "DejaVuSans-Bold"
         except Exception as e:
             logger.warning(f"Could not register DejaVuSans-Bold: {e}")
+
+    try:
+        if "Inter" in pdfmetrics.getRegisteredFontNames() and "Inter-Bold" in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFontFamily("Inter", normal="Inter", bold="Inter-Bold")
+    except Exception:
+        pass
+
+    try:
+        if "DejaVuSans" in pdfmetrics.getRegisteredFontNames() and "DejaVuSans-Bold" in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFontFamily("DejaVuSans", normal="DejaVuSans", bold="DejaVuSans-Bold")
+    except Exception:
+        pass
 
     _FONTS_REGISTERED = True
 
@@ -270,6 +283,84 @@ def draw_qr_code(c: canvas.Canvas, content: str, label: Optional[str], label_pos
     c.restoreState()
 
 
+def resolve_competitor_task(entry: Dict[str, Any], comp: Optional[Dict[str, Any]]) -> str:
+    if not comp or entry.get("isBreak"):
+        return ""
+    assignments = comp.get("assignments")
+    if not assignments or not isinstance(assignments, dict):
+        return ""
+
+    code = str(entry.get("code") or "").lower()
+    event_name = str(entry.get("event") or "").lower()
+
+    event_id = None
+    if "333oh" in code or "one-handed" in event_name or "3x3 oh" in event_name:
+        event_id = "333oh"
+    elif "333bf" in code or "3x3 bf" in event_name or "blindfolded" in event_name:
+        event_id = "333bf"
+    elif "333fm" in code or "fewest moves" in event_name or "3x3 fm" in event_name:
+        event_id = "333fm"
+    elif "333mbf" in code or "multi-blind" in event_name or "3x3 mbf" in event_name:
+        event_id = "333mbf"
+    elif "333" in code or "3x3x3" in event_name or "3x3" in event_name:
+        event_id = "333"
+    elif "222" in code or "2x2x2" in event_name or "2x2" in event_name:
+        event_id = "222"
+    elif "444" in code or "4x4x4" in event_name or "4x4" in event_name:
+        event_id = "444"
+    elif "555" in code or "5x5x5" in event_name or "5x5" in event_name:
+        event_id = "555"
+    elif "666" in code or "6x6x6" in event_name or "6x6" in event_name:
+        event_id = "666"
+    elif "777" in code or "7x7x7" in event_name or "7x7" in event_name:
+        event_id = "777"
+    elif "clock" in code or "clock" in event_name:
+        event_id = "clock"
+    elif "minx" in code or "megaminx" in event_name or "mega" in event_name:
+        event_id = "minx"
+    elif "pyram" in code or "pyraminx" in event_name or "pyra" in event_name:
+        event_id = "pyram"
+    elif "skewb" in code or "skewb" in event_name:
+        event_id = "skewb"
+    elif "sq1" in code or "square-1" in event_name or "sq-1" in event_name:
+        event_id = "sq1"
+
+    if not event_id or event_id not in assignments:
+        return ""
+
+    ev_assign = assignments[event_id]
+    comp_groups = [str(g) for g in ev_assign.get("comp", [])]
+    scr_groups = [str(g) for g in ev_assign.get("scr", [])]
+    judge_groups = [str(g) for g in ev_assign.get("judge", [])]
+    runner_groups = [str(g) for g in ev_assign.get("runner", [])]
+
+    g_match = re.search(r"-g(\d+)", code) or re.search(
+        r"(?:^|\s|-|G)(?:roup\s*|G)(\d+)(?:\s|$|-)", event_name, re.IGNORECASE
+    )
+    if g_match:
+        g_num = str(g_match.group(1))
+        if g_num in comp_groups:
+            return "C"
+        if g_num in scr_groups:
+            return "S"
+        if g_num in judge_groups:
+            return "J"
+        if g_num in runner_groups:
+            return "R"
+        return ""
+
+    if comp_groups:
+        return "C"
+    if scr_groups:
+        return "S"
+    if judge_groups:
+        return "J"
+    if runner_groups:
+        return "R"
+
+    return ""
+
+
 def draw_schedule_table(
     c: canvas.Canvas,
     title: Optional[str],
@@ -279,6 +370,7 @@ def draw_schedule_table(
     h: float,
     opacity: float = 1.0,
     schedule_data: Optional[Dict[str, Any]] = None,
+    competitor: Optional[Dict[str, Any]] = None,
 ):
     c.saveState()
     c.setFillAlpha(opacity)
@@ -367,6 +459,8 @@ def draw_schedule_table(
             t_time = str(entry.get("time", ""))
             t_ev = str(entry.get("event", ""))
             t_task = str(entry.get("task", ""))
+            if competitor and competitor.get("assignments"):
+                t_task = resolve_competitor_task(entry, competitor)
             is_break = entry.get("isBreak", False)
             room_color = entry.get("roomColor")
 
@@ -566,6 +660,7 @@ def draw_badge_contents(
                 pt_h,
                 opacity,
                 schedule_data=schedule_data or elem.get("schedule_data") or comp.get("schedule_data"),
+                competitor=comp,
             )
             c.restoreState()
             continue

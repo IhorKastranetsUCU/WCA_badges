@@ -11,6 +11,8 @@ import {
   Search,
   Camera,
   Loader2,
+  ClipboardCheck,
+  RefreshCw,
 } from "lucide-react";
 import { BadgeDimensions, BadgePreset } from "@/types/badge";
 import { Competitor } from "@/types/competitor";
@@ -30,6 +32,9 @@ interface LeftPanelProps {
   onUploadCompetitorAvatar?: (competitorId: string, file: File) => void;
   isFetchingAvatars?: boolean;
   onAddAdditionalQrCode?: () => void;
+  onUploadAssignmentsPdf?: (file: File) => void;
+  isUploadingAssignments?: boolean;
+  assignmentStatusMessage?: string | null;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -47,8 +52,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   onUploadCompetitorAvatar,
   isFetchingAvatars = false,
   onAddAdditionalQrCode,
+  onUploadAssignmentsPdf,
+  isUploadingAssignments = false,
+  assignmentStatusMessage,
 }) => {
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const assignmentsPdfInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
@@ -158,6 +167,48 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           </div>
           <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500" />
         </div>
+
+        {/* Upload Competitor Cards PDF (.pdf) */}
+        {onUploadAssignmentsPdf && (
+          <div
+            onClick={() => assignmentsPdfInputRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files?.[0]) onUploadAssignmentsPdf(e.dataTransfer.files[0]);
+            }}
+            className="group border border-slate-200 hover:border-purple-400 hover:bg-purple-50/40 rounded-xl p-2.5 flex items-center gap-2.5 transition-all cursor-pointer"
+          >
+            <input
+              type="file"
+              ref={assignmentsPdfInputRef}
+              onChange={(e) =>
+                e.target.files?.[0] && onUploadAssignmentsPdf(e.target.files[0])
+              }
+              accept=".pdf,application/pdf"
+              className="hidden"
+            />
+            <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+              {isUploadingAssignments ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-purple-600" />
+              ) : (
+                <ClipboardCheck className="w-4 h-4" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                <span>Upload Cards PDF (.pdf)</span>
+                <span className="text-[9px] bg-purple-100 text-purple-700 px-1 py-0.2 rounded font-bold">
+                  Groupifier
+                </span>
+              </div>
+              <div className="text-[10px] text-slate-400 truncate">
+                {assignmentStatusMessage || "Assign tasks for badge back side"}
+              </div>
+            </div>
+            <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-500" />
+          </div>
+        )}
 
         {/* Add Custom Person Button */}
         <button
