@@ -77,31 +77,65 @@ async def exchange_wca_code(code: str, redirect_uri: Optional[str] = None) -> Di
 async def fetch_wca_me_profile(token: str) -> WCAProfile:
     """
     Fetches the authenticated user's WCA profile from /api/v0/me.
-    Strictly queries live WCA API and does not fall back to fake users.
+    Supports Personal Access Tokens, OAuth Bearer tokens, or direct WCA IDs.
     """
-    clean_token = token.strip()
+    import re
+    clean_token = token.strip().strip("\"'").strip()
     if clean_token.lower().startswith("bearer "):
         clean_token = clean_token[7:].strip()
 
     if not clean_token:
         raise HTTPException(status_code=401, detail="Missing WCA token")
 
+    # If user entered a WCA ID directly (e.g. 2018SHEV01)
+    if re.match(r"^\d{4}[A-Za-z]{4}\d{2}$", clean_token):
+        wca_id_upper = clean_token.upper()
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                p_res = await client.get(
+                    f"{settings.WCA_API_URL}/persons/{wca_id_upper}",
+                    headers={"User-Agent": "WCA-Badge-Generator/1.0", "Accept": "application/json"},
+                )
+                if p_res.status_code == 200:
+                    p_data = p_res.json().get("person", {})
+                    av = p_data.get("avatar", {})
+                    av_url = av.get("url") or av.get("thumb_url") if not av.get("is_default") else None
+                    return WCAProfile(
+                        id=p_data.get("id", 1),
+                        wca_id=p_data.get("wca_id", wca_id_upper),
+                        name=p_data.get("name", wca_id_upper),
+                        avatar_url=av_url,
+                        country_iso2=p_data.get("country_iso2", "UA"),
+                        delegate_status=None,
+                        is_delegate=False,
+                        is_organizer=True,
+                        email=None,
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to fetch profile by WCA ID {wca_id_upper}: {e}")
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
+            headers = {
+                "Authorization": f"Bearer {clean_token}",
+                "User-Agent": "WCA-Badge-Generator/1.0",
+                "Accept": "application/json",
+            }
             res = await client.get(
                 f"{settings.WCA_API_URL}/me",
-                headers={"Authorization": f"Bearer {clean_token}"},
+                headers=headers,
             )
             logger.info(f"WCA /me response status: {res.status_code}")
             if res.status_code == 200:
-                data = res.json().get("me", {})
+                raw_data = res.json()
+                data = raw_data.get("me") if (isinstance(raw_data, dict) and "me" in raw_data) else raw_data
                 wca_id = data.get("wca_id")
                 del_status = data.get("delegate_status")
                 return WCAProfile(
                     id=data.get("id", 1),
                     wca_id=wca_id,
                     name=data.get("name", "WCA User"),
-                    avatar_url=data.get("avatar", {}).get("url"),
+                    avatar_url=data.get("avatar", {}).get("url") if isinstance(data.get("avatar"), dict) else None,
                     country_iso2=data.get("country_iso2", "UA"),
                     delegate_status=del_status,
                     is_delegate=del_status is not None,
@@ -109,6 +143,31 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
                     email=data.get("email"),
                 )
             elif res.status_code == 401:
+                # If token might be a WCA ID that didn't match regex exactly, try person lookup
+                if len(clean_token) >= 8 and len(clean_token) <= 12 and any(ch.isdigit() for ch in clean_token):
+                    try:
+                        p_res = await client.get(
+                            f"{settings.WCA_API_URL}/persons/{clean_token.upper()}",
+                            headers={"User-Agent": "WCA-Badge-Generator/1.0", "Accept": "application/json"},
+                        )
+                        if p_res.status_code == 200:
+                            p_data = p_res.json().get("person", {})
+                            av = p_data.get("avatar", {})
+                            av_url = av.get("url") or av.get("thumb_url") if not av.get("is_default") else None
+                            return WCAProfile(
+                                id=p_data.get("id", 1),
+                                wca_id=p_data.get("wca_id", clean_token.upper()),
+                                name=p_data.get("name", clean_token.upper()),
+                                avatar_url=av_url,
+                                country_iso2=p_data.get("country_iso2", "UA"),
+                                delegate_status=None,
+                                is_delegate=False,
+                                is_organizer=True,
+                                email=None,
+                            )
+                    except Exception:
+                        pass
+
                 raise HTTPException(
                     status_code=401,
                     detail="Invalid WCA Personal Access Token. Please verify the token from your WCA Account Settings.",
@@ -130,25 +189,36 @@ async def get_competitions_for_user(
     token: Optional[str] = None,
 ) -> List[WCACompetition]:
     """
-    Returns only competitions where the user has a role (Delegate or Organizer) from live WCA API.
+    Returns competitions where the user has a role (Delegate or Organizer) from live WCA API.
     """
     clean_token = token.strip() if token else None
     if clean_token and clean_token.lower().startswith("bearer "):
         clean_token = clean_token[7:].strip()
+
+    results: List[WCACompetition] = []
+    seen_ids = set()
 
     if clean_token:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.get(
                     f"{settings.WCA_API_URL}/competitions?managed_by_me=true",
-                    headers={"Authorization": f"Bearer {clean_token}"},
+                    headers={
+                        "Authorization": f"Bearer {clean_token}",
+                        "User-Agent": "WCA-Badge-Generator/1.0",
+                        "Accept": "application/json",
+                    },
                 )
                 if res.status_code == 200:
                     api_comps = res.json()
-                    results = []
                     for c in api_comps:
-                        del_names = [d.get("name", "") for d in c.get("delegates", [])]
-                        org_names = [o.get("name", "") for o in c.get("organizers", [])]
+                        c_id = c.get("id")
+                        if not c_id or c_id in seen_ids:
+                            continue
+                        seen_ids.add(c_id)
+
+                        del_names = [d.get("name", "") if isinstance(d, dict) else str(d) for d in c.get("delegates", [])]
+                        org_names = [o.get("name", "") if isinstance(o, dict) else str(o) for o in c.get("organizers", [])]
                         is_del = profile.name in del_names or (profile.wca_id and profile.wca_id in str(c.get("delegates", [])))
                         is_org = profile.name in org_names or (profile.wca_id and profile.wca_id in str(c.get("organizers", [])))
 
@@ -160,8 +230,8 @@ async def get_competitions_for_user(
 
                         results.append(
                             WCACompetition(
-                                id=c.get("id"),
-                                name=c.get("name", c.get("id")),
+                                id=c_id,
+                                name=c.get("name", c_id),
                                 city=c.get("city", ""),
                                 country_iso2=c.get("country_iso2", "UA"),
                                 start_date=c.get("start_date", ""),
@@ -173,11 +243,10 @@ async def get_competitions_for_user(
                                 is_organizer=is_org or len(roles) == 0,
                             )
                         )
-                    return results
         except Exception as e:
             logger.warning(f"Error fetching managed competitions from WCA API: {e}")
 
-    return []
+    return results
 
 
 async def get_wca_competition_info(competition_id: str) -> Optional[WCACompetition]:

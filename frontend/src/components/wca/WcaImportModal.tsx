@@ -143,7 +143,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
   const approvedSelected = categorized?.approved.filter((r) => r.selected).length || 0;
   const pendingSelected = categorized?.pending.filter((r) => r.selected).length || 0;
   const cancelledSelected = categorized?.cancelled.filter((r) => r.selected).length || 0;
-  const totalSelected = approvedSelected + pendingSelected;
+  const totalSelected = approvedSelected + pendingSelected + cancelledSelected;
 
   const currentItems = categorized ? categorized[activeCategory] : [];
   const filteredItems = currentItems.filter((item) => {
@@ -164,10 +164,11 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
       selectedToImport = categorized.pending.filter((r) => r.selected);
       if (selectedToImport.length === 0) selectedToImport = categorized.pending;
     } else {
-      // Only import approved and pending, NEVER cancelled or rejected
+      // Import selected across approved, pending, and cancelled/rejected
       selectedToImport = [
         ...categorized.approved,
         ...categorized.pending,
+        ...categorized.cancelled,
       ].filter((r) => r.selected);
     }
 
@@ -417,29 +418,23 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
             </button>
           </div>
 
-          {activeCategory !== "cancelled" ? (
-            <div className="flex items-center gap-2 pb-2">
-              <button
-                type="button"
-                onClick={() => handleToggleCategoryAll(activeCategory, true)}
-                className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
-              >
-                Select All
-              </button>
-              <span className="text-slate-300">|</span>
-              <button
-                type="button"
-                onClick={() => handleToggleCategoryAll(activeCategory, false)}
-                className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                Deselect All
-              </button>
-            </div>
-          ) : (
-            <span className="text-[11px] text-slate-400 italic pb-2">
-              Cancelled / rejected competitors cannot be imported
-            </span>
-          )}
+          <div className="flex items-center gap-2 pb-2">
+            <button
+              type="button"
+              onClick={() => handleToggleCategoryAll(activeCategory, true)}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
+            >
+              Select All
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={() => handleToggleCategoryAll(activeCategory, false)}
+              className="text-[11px] font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
+            >
+              None
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -469,35 +464,23 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
             filteredItems.map((item) => (
               <div
                 key={item.id}
-                onClick={() => {
-                  if (activeCategory !== "cancelled") {
-                    handleToggleRegistration(item.id);
-                  }
-                }}
-                className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-all ${
-                  activeCategory === "cancelled"
-                    ? "opacity-60 cursor-not-allowed bg-slate-50/50"
-                    : item.selected
-                    ? "bg-blue-50/70 cursor-pointer"
-                    : "hover:bg-slate-50 cursor-pointer"
+                onClick={() => handleToggleRegistration(item.id)}
+                className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-all cursor-pointer ${
+                  item.selected
+                    ? "bg-blue-50/70"
+                    : "hover:bg-slate-50"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  {activeCategory !== "cancelled" ? (
-                    <div
-                      className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
-                        item.selected
-                          ? "bg-blue-600 border-blue-600 text-white"
-                          : "border-slate-300 bg-white"
-                      }`}
-                    >
-                      {item.selected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </div>
-                  ) : (
-                    <div className="w-5 h-5 rounded-md flex items-center justify-center bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-bold">
-                      ✕
-                    </div>
-                  )}
+                  <div
+                    className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                      item.selected
+                        ? "bg-blue-600 border-blue-600 text-white"
+                        : "border-slate-300 bg-white"
+                    }`}
+                  >
+                    {item.selected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                  </div>
 
                   <div className="w-6 h-4 shrink-0 shadow-sm rounded-sm overflow-hidden">
                     <CountryFlag iso2={item.country_iso2} />
@@ -542,10 +525,22 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
             <span>
               Total Selected: <span className="font-extrabold text-blue-600">{totalSelected}</span>
             </span>
-            <span className="text-slate-300">•</span>
-            <span className="text-amber-700 font-medium">
-              Waiting List: <span className="font-bold">{pendingSelected}</span>
-            </span>
+            {pendingSelected > 0 && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span className="text-amber-700 font-medium">
+                  Waiting List: <span className="font-bold">{pendingSelected}</span>
+                </span>
+              </>
+            )}
+            {cancelledSelected > 0 && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span className="text-rose-700 font-medium">
+                  Cancelled / Rejected: <span className="font-bold">{cancelledSelected}</span>
+                </span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

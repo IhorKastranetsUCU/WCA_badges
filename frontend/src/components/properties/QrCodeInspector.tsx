@@ -9,10 +9,24 @@ interface QrCodeInspectorProps {
   qrContent?: string;
   qrLabel?: string;
   qrLabelPosition?: "top" | "bottom" | "none";
+  qrColor?: string;
+  qrBgColor?: string;
+  qrFontFamily?: string;
+  qrFontSize?: number;
+  qrTextColor?: string;
   badgeDimensions: BadgeDimensions;
   onChangePosition: (patch: Partial<ElementPosition>) => void;
   onChangeOpacity: (opacity: number) => void;
-  onChangeQr: (patch: { qr_content?: string; qr_label?: string; qr_label_position?: "top" | "bottom" | "none" }) => void;
+  onChangeQr: (patch: {
+    qr_content?: string;
+    qr_label?: string;
+    qr_label_position?: "top" | "bottom" | "none";
+    qr_color?: string;
+    qr_bg_color?: string;
+    qr_font_family?: string;
+    qr_font_size?: number;
+    qr_text_color?: string;
+  }) => void;
   onLayerChange: (action: "bring_to_front" | "send_to_back" | "move_up" | "move_down") => void;
   onAddAdditionalQrCode?: () => void;
 }
@@ -23,12 +37,19 @@ const PRESET_URLS = [
   { label: "WCA Website", url: "https://www.worldcubeassociation.org" },
 ];
 
+const FONT_FAMILIES = ["Inter", "Roboto", "DejaVu Sans", "Montserrat", "Arial", "Impact"];
+
 export const QrCodeInspector: React.FC<QrCodeInspectorProps> = ({
   position,
   opacity,
   qrContent = "https://live.worldcubeassociation.org",
   qrLabel = "LIVE RESULTS",
   qrLabelPosition = "top",
+  qrColor = "#000000",
+  qrBgColor = "#FFFFFF",
+  qrFontFamily = "Inter",
+  qrFontSize = 10,
+  qrTextColor = "#1E293B",
   badgeDimensions,
   onChangePosition,
   onChangeOpacity,
@@ -39,7 +60,7 @@ export const QrCodeInspector: React.FC<QrCodeInspectorProps> = ({
   return (
     <div className="space-y-4 select-none">
       <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-100 text-xs text-blue-900 leading-relaxed">
-        <span className="font-bold">Scalable QR Code:</span> Create scannable links for Live Results, Groups, or Competitor details with customizable labels.
+        <span className="font-bold">Customizable QR Code:</span> Adjust QR module color, background, and label typography.
       </div>
 
       {/* Button to add an additional QR code */}
@@ -80,6 +101,45 @@ export const QrCodeInspector: React.FC<QrCodeInspectorProps> = ({
         </div>
       </div>
 
+      {/* QR Code Colors */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[11px] font-semibold text-slate-500 block mb-1">QR Module Color</label>
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+            <input
+              type="color"
+              value={qrColor}
+              onChange={(e) => onChangeQr({ qr_color: e.target.value })}
+              className="w-6 h-6 rounded cursor-pointer border border-slate-300 bg-transparent p-0"
+            />
+            <input
+              type="text"
+              value={qrColor.toUpperCase()}
+              onChange={(e) => onChangeQr({ qr_color: e.target.value })}
+              className="w-full text-[11px] font-mono font-semibold bg-white border border-slate-200 rounded px-1.5 py-0.5 uppercase"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[11px] font-semibold text-slate-500 block mb-1">QR Background</label>
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+            <input
+              type="color"
+              value={qrBgColor}
+              onChange={(e) => onChangeQr({ qr_bg_color: e.target.value })}
+              className="w-6 h-6 rounded cursor-pointer border border-slate-300 bg-transparent p-0"
+            />
+            <input
+              type="text"
+              value={qrBgColor.toUpperCase()}
+              onChange={(e) => onChangeQr({ qr_bg_color: e.target.value })}
+              className="w-full text-[11px] font-mono font-semibold bg-white border border-slate-200 rounded px-1.5 py-0.5 uppercase"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* QR Label & Position */}
       <div className="space-y-2">
         <div>
@@ -112,6 +172,56 @@ export const QrCodeInspector: React.FC<QrCodeInspectorProps> = ({
             ))}
           </div>
         </div>
+
+        {/* Label Typography Adjustments */}
+        {qrLabelPosition !== "none" && (
+          <div className="grid grid-cols-3 gap-2 pt-1 animate-fadeIn">
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Font Family</label>
+              <select
+                value={qrFontFamily}
+                onChange={(e) => onChangeQr({ qr_font_family: e.target.value })}
+                className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded p-1.5 cursor-pointer"
+              >
+                {FONT_FAMILIES.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Size (pt)</label>
+              <input
+                type="number"
+                min="6"
+                max="24"
+                value={qrFontSize}
+                onChange={(e) => onChangeQr({ qr_font_size: parseInt(e.target.value) || 10 })}
+                className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded p-1.5"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] text-slate-500 block mb-0.5">Text Color</label>
+              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded border border-slate-200">
+                <input
+                  type="color"
+                  value={qrTextColor}
+                  onChange={(e) => onChangeQr({ qr_text_color: e.target.value })}
+                  className="w-5 h-5 rounded cursor-pointer border border-slate-300 bg-transparent p-0"
+                />
+                <input
+                  type="text"
+                  value={qrTextColor.toUpperCase()}
+                  onChange={(e) => onChangeQr({ qr_text_color: e.target.value })}
+                  className="w-full text-[10px] font-mono bg-white border border-slate-200 rounded px-1 uppercase"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Opacity */}

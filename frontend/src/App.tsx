@@ -625,6 +625,29 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDeleteCompetitor = async (competitorId: string) => {
+    setCompetitors((prev) => {
+      const idx = prev.findIndex((c) => c.id === competitorId);
+      const updated = prev.filter((c) => c.id !== competitorId);
+      if (updated.length === 0) {
+        setCurrentParticipantIndex(0);
+      } else if (currentParticipantIndex >= updated.length) {
+        setCurrentParticipantIndex(Math.max(0, updated.length - 1));
+      } else if (idx === currentParticipantIndex && currentParticipantIndex > 0) {
+        setCurrentParticipantIndex(currentParticipantIndex - 1);
+      }
+      return updated;
+    });
+
+    try {
+      await fetch(getApiUrl(`/api/competitors/${competitorId}`), {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.warn("Failed to delete competitor on backend:", err);
+    }
+  };
+
   const enabledFields: Record<string, boolean> = {
     name: currentSideConfig.elements.some((e) => e.type === "name" && e.enabled),
     wca_id: currentSideConfig.elements.some((e) => e.type === "wca_id" && e.enabled),
@@ -1382,9 +1405,7 @@ export const App: React.FC = () => {
           onUploadCompetitorAvatar={handleUploadCompetitorAvatar}
           isFetchingAvatars={isFetchingAvatars}
           onAddAdditionalQrCode={handleAddAdditionalQrCode}
-          onUploadAssignmentsPdf={handleUploadAssignmentsPdf}
-          isUploadingAssignments={isUploadingAssignments}
-          assignmentStatusMessage={assignmentStatusMessage}
+          onDeleteCompetitor={handleDeleteCompetitor}
         />
 
         {/* Central Container: Badge Preview Canvas */}
@@ -1435,6 +1456,7 @@ export const App: React.FC = () => {
           onAddAdditionalQrCode={handleAddAdditionalQrCode}
           onUploadAssignmentsPdf={handleUploadAssignmentsPdf}
           isUploadingAssignments={isUploadingAssignments}
+          assignmentStatusMessage={assignmentStatusMessage}
         />
       </div>
 

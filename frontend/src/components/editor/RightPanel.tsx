@@ -35,6 +35,7 @@ interface RightPanelProps {
   onAddAdditionalQrCode?: () => void;
   onUploadAssignmentsPdf?: (file: File) => void;
   isUploadingAssignments?: boolean;
+  assignmentStatusMessage?: string | null;
 }
 
 export const RightPanel: React.FC<RightPanelProps> = ({
@@ -61,6 +62,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   onAddAdditionalQrCode,
   onUploadAssignmentsPdf,
   isUploadingAssignments = false,
+  assignmentStatusMessage,
 }) => {
   const [activeTab, setActiveTab] = useState<"style" | "position">("style");
 
@@ -195,6 +197,11 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           qrContent={selectedElement.qr_content}
           qrLabel={selectedElement.qr_label}
           qrLabelPosition={selectedElement.qr_label_position}
+          qrColor={selectedElement.qr_color}
+          qrBgColor={selectedElement.qr_bg_color}
+          qrFontFamily={selectedElement.qr_font_family}
+          qrFontSize={selectedElement.qr_font_size}
+          qrTextColor={selectedElement.qr_text_color}
           badgeDimensions={badgeDimensions}
           onChangePosition={(patch) =>
             onUpdateElement({
@@ -225,6 +232,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           onLayerChange={onLayerChange}
           onUploadAssignmentsPdf={onUploadAssignmentsPdf}
           isUploadingAssignments={isUploadingAssignments}
+          assignmentStatusMessage={assignmentStatusMessage}
         />
       )}
 

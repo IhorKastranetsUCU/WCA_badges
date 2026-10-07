@@ -16,7 +16,7 @@ interface TypographyInspectorProps {
   onChangeFormatSuffix?: (suffix: string) => void;
 }
 
-const FONT_FAMILIES = ["Inter", "Roboto", "Montserrat", "Open Sans", "Arial", "Impact", "Georgia"];
+const FONT_FAMILIES = ["Inter", "Roboto", "DejaVu Sans", "Montserrat", "Open Sans", "Arial", "Impact", "Georgia"];
 const FONT_WEIGHTS = [
   { label: "Regular (400)", value: "400" },
   { label: "Medium (500)", value: "500" },

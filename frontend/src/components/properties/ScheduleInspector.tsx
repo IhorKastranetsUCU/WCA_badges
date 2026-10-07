@@ -14,6 +14,7 @@ interface ScheduleInspectorProps {
   onLayerChange: (action: "bring_to_front" | "send_to_back" | "move_up" | "move_down") => void;
   onUploadAssignmentsPdf?: (file: File) => void;
   isUploadingAssignments?: boolean;
+  assignmentStatusMessage?: string | null;
 }
 
 export const ScheduleInspector: React.FC<ScheduleInspectorProps> = ({
@@ -27,13 +28,14 @@ export const ScheduleInspector: React.FC<ScheduleInspectorProps> = ({
   onLayerChange,
   onUploadAssignmentsPdf,
   isUploadingAssignments = false,
+  assignmentStatusMessage,
 }) => {
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="space-y-4 select-none">
       <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-100 text-xs text-blue-900 leading-relaxed">
-        <span className="font-bold">Scalable Schedule Grid:</span> Displays 4-column multi-day timetable with automatic task badges (<span className="text-rose-700 font-bold">C</span>: Compete, <span className="text-blue-700 font-bold">J</span>: Judge, <span className="text-amber-700 font-bold">S</span>: Scrambler, <span className="text-emerald-700 font-bold">R</span>: Runner). Resizes seamlessly to fit any badge dimensions.
+        <span className="font-bold">Scalable Schedule Grid:</span> Displays multi-day timetable with automatic task badges (<span className="text-blue-700 font-bold">C</span>: Compete [Blue], <span className="text-amber-700 font-bold">J</span>: Judge [Yellow], <span className="text-red-700 font-bold">S</span>: Scrambler [Red], <span className="text-emerald-700 font-bold">R</span>: Runner [Green]).
       </div>
 
       {/* Upload Groupifier Competitor Cards PDF */}
@@ -51,6 +53,12 @@ export const ScheduleInspector: React.FC<ScheduleInspectorProps> = ({
           <p className="text-[11px] text-purple-800 leading-snug">
             Upload the official competitor cards PDF to automatically parse roles (Comp, Judge, Scr, Runner) and assign them to each competitor's badge.
           </p>
+          {assignmentStatusMessage && (
+            <div className="text-[11px] font-bold text-purple-900 bg-purple-100/80 border border-purple-200 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              <span>{assignmentStatusMessage}</span>
+            </div>
+          )}
           <input
             type="file"
             ref={pdfInputRef}
@@ -72,7 +80,7 @@ export const ScheduleInspector: React.FC<ScheduleInspectorProps> = ({
             ) : (
               <>
                 <Upload className="w-3.5 h-3.5" />
-                <span>Upload Cards PDF (.pdf)</span>
+                <span>{assignmentStatusMessage ? "Upload New Cards PDF (.pdf)" : "Upload Cards PDF (.pdf)"}</span>
               </>
             )}
           </button>

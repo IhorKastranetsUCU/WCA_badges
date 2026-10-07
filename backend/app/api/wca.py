@@ -228,7 +228,7 @@ async def import_selected_registrations(
     """
     selected_items = [
         item for item in payload.selected_registrations
-        if item.selected and str(item.status).lower() not in ["cancelled", "deleted", "rejected", "canceled", "declined", "withdrawn", "d"]
+        if item.selected
     ]
     if not selected_items:
         raise HTTPException(status_code=400, detail="No competitors were selected for import")

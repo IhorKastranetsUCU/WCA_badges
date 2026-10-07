@@ -48,6 +48,11 @@ export interface BadgeElement {
   qr_content?: string;
   qr_label?: string;
   qr_label_position?: "top" | "bottom" | "none";
+  qr_color?: string;
+  qr_bg_color?: string;
+  qr_font_family?: string;
+  qr_font_size?: number;
+  qr_text_color?: string;
   schedule_title?: string;
   schedule_data?: any;
 }

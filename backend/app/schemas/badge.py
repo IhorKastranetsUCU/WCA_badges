@@ -44,6 +44,11 @@ class BadgeElement(BaseModel):
     qr_content: Optional[str] = None
     qr_label: Optional[str] = None
     qr_label_position: Optional[Literal["top", "bottom", "none"]] = "bottom"
+    qr_color: Optional[str] = "#000000"
+    qr_bg_color: Optional[str] = "#FFFFFF"
+    qr_font_family: Optional[str] = "Inter"
+    qr_font_size: Optional[int] = 10
+    qr_text_color: Optional[str] = "#1E293B"
     schedule_title: Optional[str] = None
     schedule_data: Optional[Any] = None
 

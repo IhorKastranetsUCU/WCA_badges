@@ -89,6 +89,18 @@ def _ensure_fonts_registered():
             logger.warning(f"Could not register DejaVuSans-Bold: {e}")
 
     try:
+        roboto_reg = os.path.join(FONT_DIR, "Roboto-Regular.ttf")
+        roboto_bold = os.path.join(FONT_DIR, "Roboto-Bold.ttf")
+        if os.path.exists(roboto_reg):
+            pdfmetrics.registerFont(TTFont("Roboto", roboto_reg))
+        if os.path.exists(roboto_bold):
+            pdfmetrics.registerFont(TTFont("Roboto-Bold", roboto_bold))
+        if "Roboto" in pdfmetrics.getRegisteredFontNames() and "Roboto-Bold" in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFontFamily("Roboto", normal="Roboto", bold="Roboto-Bold")
+    except Exception as e:
+        logger.warning(f"Could not register Roboto: {e}")
+
+    try:
         if "Inter" in pdfmetrics.getRegisteredFontNames() and "Inter-Bold" in pdfmetrics.getRegisteredFontNames():
             pdfmetrics.registerFontFamily("Inter", normal="Inter", bold="Inter-Bold")
     except Exception:
@@ -107,7 +119,9 @@ def get_pdf_font(family: Optional[str] = None, is_bold: bool = False) -> str:
     _ensure_fonts_registered()
     fam = (family or "").lower()
     reg_fonts = pdfmetrics.getRegisteredFontNames()
-    if "Inter" in reg_fonts and (not fam or "inter" in fam or fam in ["sans-serif", "system-ui", "arial", "helvetica", "roboto", "montserrat", "open sans"]):
+    if "Roboto" in reg_fonts and "roboto" in fam:
+        return "Roboto-Bold" if is_bold else "Roboto"
+    if "Inter" in reg_fonts and (not fam or "inter" in fam or fam in ["sans-serif", "system-ui", "arial", "helvetica", "montserrat", "open sans"]):
         return "Inter-Bold" if is_bold else "Inter"
     if "DejaVuSans" in reg_fonts:
         return "DejaVuSans-Bold" if is_bold else "DejaVuSans"
@@ -236,9 +250,29 @@ def get_optimized_avatar(avatar_url: str, target_w_mm: float, target_h_mm: float
         return None
 
 
-def draw_qr_code(c: canvas.Canvas, content: str, label: Optional[str], label_pos: str, x: float, y: float, w: float, h: float, opacity: float = 1.0):
+def draw_qr_code(
+    c: canvas.Canvas,
+    content: str,
+    label: Optional[str],
+    label_pos: str,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    opacity: float = 1.0,
+    fg_color: str = "#000000",
+    bg_color: str = "#FFFFFF",
+    font_family: Optional[str] = None,
+    font_size: Optional[float] = None,
+    text_color: str = "#1E293B",
+):
     c.saveState()
     c.setFillAlpha(opacity)
+
+    # QR background fill
+    bg_c = hex_to_color(bg_color or "#FFFFFF", "#FFFFFF")
+    c.setFillColor(bg_c)
+    c.rect(x, y, w, h, fill=1, stroke=0)
 
     qr = qrcode.QRCode(
         version=1,
@@ -248,7 +282,7 @@ def draw_qr_code(c: canvas.Canvas, content: str, label: Optional[str], label_pos
     )
     qr.add_data(content or "https://live.worldcubeassociation.org")
     qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
+    img = qr.make_image(fill_color=fg_color or "#000000", back_color=bg_color or "#FFFFFF")
 
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
@@ -256,7 +290,8 @@ def draw_qr_code(c: canvas.Canvas, content: str, label: Optional[str], label_pos
     qr_reader = ImageReader(img_buffer)
 
     has_label = bool(label and label.strip())
-    label_h = 10.0 if has_label else 0.0
+    lbl_size = float(font_size or 7.0)
+    label_h = (lbl_size * 1.5) if has_label else 0.0
 
     qr_y = y
     qr_h = h
@@ -273,14 +308,29 @@ def draw_qr_code(c: canvas.Canvas, content: str, label: Optional[str], label_pos
     c.drawImage(qr_reader, qr_x, qr_actual_y, width=qr_size, height=qr_size)
 
     if has_label:
-        c.setFont(get_pdf_font(None, True), 7)
-        c.setFillColor(HexColor("#0F172A"))
+        lbl_font = get_pdf_font(font_family, True)
+        c.setFont(lbl_font, lbl_size)
+        c.setFillColor(hex_to_color(text_color or "#0F172A", "#0F172A"))
         if label_pos == "bottom":
             c.drawCentredString(x + w / 2.0, y + 2, label.upper())
         else:
-            c.drawCentredString(x + w / 2.0, y + h - 8, label.upper())
+            c.drawCentredString(x + w / 2.0, y + h - label_h + 2, label.upper())
 
     c.restoreState()
+
+
+def format_schedule_event_name(name: str) -> str:
+    """Expands abbreviations (R1 -> Round 1, A1 -> Attempt 1, etc.) into clean readable names."""
+    cleaned = str(name or "")
+    cleaned = re.sub(r"\bR1\b", "Round 1", cleaned)
+    cleaned = re.sub(r"\bR2\b", "Round 2", cleaned)
+    cleaned = re.sub(r"\bR3\b", "Round 3", cleaned)
+    cleaned = re.sub(r"\bR4\b", "Round 4", cleaned)
+    cleaned = re.sub(r"\bA1\b", "Attempt 1", cleaned)
+    cleaned = re.sub(r"\bA2\b", "Attempt 2", cleaned)
+    cleaned = re.sub(r"\bA3\b", "Attempt 3", cleaned)
+    cleaned = re.sub(r"\bSemi\b", "Semifinal", cleaned)
+    return cleaned
 
 
 def resolve_competitor_task(entry: Dict[str, Any], comp: Optional[Dict[str, Any]]) -> str:
@@ -340,23 +390,23 @@ def resolve_competitor_task(entry: Dict[str, Any], comp: Optional[Dict[str, Any]
     if g_match:
         g_num = str(g_match.group(1))
         if g_num in comp_groups:
-            return "C"
+            return f"C {g_num}"
         if g_num in scr_groups:
-            return "S"
+            return f"S {g_num}"
         if g_num in judge_groups:
-            return "J"
+            return f"J {g_num}"
         if g_num in runner_groups:
-            return "R"
+            return f"R {g_num}"
         return ""
 
     if comp_groups:
-        return "C"
+        return f"C {comp_groups[0]}"
     if scr_groups:
-        return "S"
+        return f"S {scr_groups[0]}"
     if judge_groups:
-        return "J"
+        return f"J {judge_groups[0]}"
     if runner_groups:
-        return "R"
+        return f"R {runner_groups[0]}"
 
     return ""
 
@@ -390,13 +440,13 @@ def draw_schedule_table(
                 "dayName": "Friday",
                 "entries": [
                     {"time": "08:30", "event": "Check-in", "task": "", "roomColor": "#C2F5D5", "isBreak": True},
-                    {"time": "09:00", "event": "6x6x6 R1", "task": "C", "roomColor": "#C2F5D5"},
-                    {"time": "10:00", "event": "7x7x7 R1", "task": "C", "roomColor": "#C2F5D5"},
-                    {"time": "11:00", "event": "3x3 MBF", "task": "C", "roomColor": "#FB9DB0"},
+                    {"time": "09:00", "event": "6x6x6 Round 1", "task": "C 1", "roomColor": "#C2F5D5"},
+                    {"time": "10:00", "event": "7x7x7 Round 1", "task": "C 2", "roomColor": "#C2F5D5"},
+                    {"time": "11:00", "event": "3x3 MBF", "task": "C 1", "roomColor": "#FB9DB0"},
                     {"time": "12:30", "event": "LUNCH", "task": "", "roomColor": "#E2E8F0", "isBreak": True},
-                    {"time": "13:30", "event": "3x3 FM", "task": "C", "roomColor": "#FB9DB0"},
-                    {"time": "15:00", "event": "Clock R1", "task": "J", "roomColor": "#C2F5D5"},
-                    {"time": "16:30", "event": "Megaminx", "task": "C", "roomColor": "#C2F5D5"},
+                    {"time": "13:30", "event": "3x3 FM Attempt 1", "task": "C 1", "roomColor": "#FB9DB0"},
+                    {"time": "15:00", "event": "Clock Round 1", "task": "J 1", "roomColor": "#C2F5D5"},
+                    {"time": "16:30", "event": "Megaminx Round 1", "task": "C 2", "roomColor": "#C2F5D5"},
                 ]
             },
             {
@@ -404,20 +454,20 @@ def draw_schedule_table(
                 "entries": [
                     {"time": "08:30", "event": "Check-in", "task": "", "roomColor": "#C2F5D5", "isBreak": True},
                     {"time": "09:00", "event": "Opening", "task": "", "roomColor": "#C2F5D5", "isBreak": True},
-                    {"time": "09:30", "event": "5x5x5 R1", "task": "C", "roomColor": "#C2F5D5"},
-                    {"time": "11:00", "event": "Pyraminx", "task": "J", "roomColor": "#C2F5D5"},
+                    {"time": "09:30", "event": "5x5x5 Round 1", "task": "C 2", "roomColor": "#C2F5D5"},
+                    {"time": "11:00", "event": "Pyraminx Round 1", "task": "J 2", "roomColor": "#C2F5D5"},
                     {"time": "12:30", "event": "LUNCH", "task": "", "roomColor": "#E2E8F0", "isBreak": True},
-                    {"time": "13:30", "event": "2x2x2 R1", "task": "C", "roomColor": "#C2F5D5"},
-                    {"time": "15:00", "event": "3x3x3 R1", "task": "C", "roomColor": "#C2F5D5"},
-                    {"time": "17:30", "event": "Skewb R1", "task": "S", "roomColor": "#C2F5D5"},
+                    {"time": "13:30", "event": "2x2x2 Round 1", "task": "C 1", "roomColor": "#C2F5D5"},
+                    {"time": "15:00", "event": "3x3x3 Round 1", "task": "C 3", "roomColor": "#C2F5D5"},
+                    {"time": "17:30", "event": "Skewb Round 1", "task": "S 2", "roomColor": "#C2F5D5"},
                 ]
             },
             {
                 "dayName": "Sunday",
                 "entries": [
-                    {"time": "09:00", "event": "4x4x4 R2", "task": "C", "roomColor": "#C2F5D5"},
-                    {"time": "10:30", "event": "3x3x3 R2", "task": "C", "roomColor": "#C2F5D5"},
-                    {"time": "12:00", "event": "Pyra Final", "task": "QR", "roomColor": "#C2F5D5"},
+                    {"time": "09:00", "event": "4x4x4 Round 2", "task": "C 1", "roomColor": "#C2F5D5"},
+                    {"time": "10:30", "event": "3x3x3 Round 2", "task": "C 2", "roomColor": "#C2F5D5"},
+                    {"time": "12:00", "event": "Pyraminx Final", "task": "QR", "roomColor": "#C2F5D5"},
                     {"time": "12:45", "event": "LUNCH", "task": "", "roomColor": "#E2E8F0", "isBreak": True},
                     {"time": "13:45", "event": "2x2x2 Final", "task": "QR", "roomColor": "#C2F5D5"},
                     {"time": "14:45", "event": "3x3 BF Final", "task": "QR", "roomColor": "#FB9DB0"},
@@ -433,14 +483,15 @@ def draw_schedule_table(
 
     for i, day in enumerate(days[:num_cols]):
         col_x = x + i * col_w
-        day_name = str(day.get("dayName") or f"Day {i+1}").upper()
+        day_name = str(day.get("dayName") or f"Day {i+1}")
 
-        # Day column header
+        # Day column header (full clean name, scaled dynamically to avoid clipping)
         c.setFillColor(HexColor("#334155"))
         c.rect(col_x, y + h - header_h, col_w, header_h, fill=1, stroke=0)
         c.setFillColor(HexColor("#FFFFFF"))
-        c.setFont(get_pdf_font(None, True), 6)
-        c.drawCentredString(col_x + col_w / 2.0, y + h - header_h + 3, day_name[:4])
+        day_font_size = max(4.0, min(6.2, col_w / (max(4, len(day_name)) * 0.72)))
+        c.setFont(get_pdf_font(None, True), day_font_size)
+        c.drawCentredString(col_x + col_w / 2.0, y + h - header_h + 3, day_name)
 
         # Column divider
         if i > 0:
@@ -457,10 +508,16 @@ def draw_schedule_table(
         for r_idx, entry in enumerate(entries[:row_count]):
             r_y = y + h - header_h - (r_idx + 1) * row_h
             t_time = str(entry.get("time", ""))
-            t_ev = str(entry.get("event", ""))
-            t_task = str(entry.get("task", ""))
+            t_ev = format_schedule_event_name(str(entry.get("event", "")))
+            
+            # If competitor has assignments, resolve task (C 2, J 1, S 3).
+            # If competitor has no assignments, leave task completely empty ("").
+            t_task = ""
             if competitor and competitor.get("assignments"):
                 t_task = resolve_competitor_task(entry, competitor)
+            elif not competitor or not competitor.get("assignments"):
+                t_task = str(entry.get("task", ""))
+
             is_break = entry.get("isBreak", False)
             room_color = entry.get("roomColor")
 
@@ -475,34 +532,54 @@ def draw_schedule_table(
             if is_break:
                 c.setFont(get_pdf_font(None, True), 4.5)
                 c.setFillColor(HexColor("#475569"))
-                c.drawCentredString(col_x + col_w / 2.0, r_y + (row_h / 2.0) - 1.5, t_ev.upper()[:16])
+                c.drawCentredString(col_x + col_w / 2.0, r_y + (row_h / 2.0) - 1.5, t_ev.upper())
             else:
                 c.setFont(get_pdf_font(None, False), 4.5)
                 c.setFillColor(HexColor("#64748B"))
                 c.drawString(col_x + 1.2, r_y + (row_h / 2.0) - 1.5, t_time)
 
-                c.setFont(get_pdf_font(None, True), 4.5)
-                c.setFillColor(HexColor("#1E293B"))
-                c.drawString(col_x + col_w * 0.35, r_y + (row_h / 2.0) - 1.5, t_ev[:12])
+                # Determine pill geometry if task is present
+                pill_w = 0.0
+                pill_x = col_x + col_w
+                if t_task:
+                    pill_w = 11.5 if len(t_task) > 1 else 7.0
+                    pill_x = col_x + col_w - pill_w - 1.0
 
-                if t_task == "C":
-                    c.setFillColor(HexColor("#FFE4E6"))
-                    c.roundRect(col_x + col_w - 7.5, r_y + 1, 6.5, row_h - 2, 0.8, fill=1, stroke=0)
-                    c.setFillColor(HexColor("#9F1239"))
-                    c.setFont(get_pdf_font(None, True), 4)
-                    c.drawCentredString(col_x + col_w - 4.2, r_y + (row_h / 2.0) - 1.4, "C")
-                elif t_task == "J":
-                    c.setFillColor(HexColor("#DBEAFE"))
-                    c.roundRect(col_x + col_w - 7.5, r_y + 1, 6.5, row_h - 2, 0.8, fill=1, stroke=0)
-                    c.setFillColor(HexColor("#1E40AF"))
-                    c.setFont(get_pdf_font(None, True), 4)
-                    c.drawCentredString(col_x + col_w - 4.2, r_y + (row_h / 2.0) - 1.4, "J")
-                elif t_task:
-                    c.setFillColor(HexColor("#F1F5F9"))
-                    c.roundRect(col_x + col_w - 9.0, r_y + 1, 8.0, row_h - 2, 0.8, fill=1, stroke=0)
-                    c.setFillColor(HexColor("#475569"))
-                    c.setFont(get_pdf_font(None, True), 3.8)
-                    c.drawCentredString(col_x + col_w - 5.0, r_y + (row_h / 2.0) - 1.4, t_task[:3])
+                event_x = col_x + col_w * 0.28
+                max_ev_w = max(5.0, (pill_x - event_x - 1.0) if t_task else (col_x + col_w - event_x - 1.5))
+
+                ev_font_size = 4.5
+                while c.stringWidth(t_ev, get_pdf_font(None, True), ev_font_size) > max_ev_w and ev_font_size > 3.0:
+                    ev_font_size -= 0.3
+
+                c.setFont(get_pdf_font(None, True), ev_font_size)
+                c.setFillColor(HexColor("#1E293B"))
+                c.drawString(event_x, r_y + (row_h / 2.0) - 1.5, t_ev)
+
+                # Task badge: Red = Scrambling (S), Yellow = Judging (J), Blue = Compete (C)
+                if t_task:
+                    upper_task = t_task.strip().upper()
+                    if upper_task.startswith("S"):
+                        bg_badge = HexColor("#DC2626")  # Red
+                        fg_badge = HexColor("#FFFFFF")
+                    elif upper_task.startswith("J"):
+                        bg_badge = HexColor("#FACC15")  # Yellow
+                        fg_badge = HexColor("#713F12")
+                    elif upper_task.startswith("C"):
+                        bg_badge = HexColor("#2563EB")  # Blue
+                        fg_badge = HexColor("#FFFFFF")
+                    elif upper_task.startswith("R"):
+                        bg_badge = HexColor("#10B981")  # Green
+                        fg_badge = HexColor("#FFFFFF")
+                    else:
+                        bg_badge = HexColor("#F1F5F9")
+                        fg_badge = HexColor("#475569")
+
+                    c.setFillColor(bg_badge)
+                    c.roundRect(pill_x, r_y + 1, pill_w, row_h - 2, 0.8, fill=1, stroke=0)
+                    c.setFillColor(fg_badge)
+                    c.setFont(get_pdf_font(None, True), 3.8 if len(t_task) > 1 else 4.2)
+                    c.drawCentredString(pill_x + pill_w / 2.0, r_y + (row_h / 2.0) - 1.4, t_task)
 
     c.restoreState()
 
@@ -645,7 +722,16 @@ def draw_badge_contents(
                     qr_text = "https://live.worldcubeassociation.org"
             qr_label = elem.get("qr_label")
             qr_label_pos = elem.get("qr_label_position", "top")
-            draw_qr_code(c, qr_text, qr_label, qr_label_pos, pt_x, pt_y, pt_w, pt_h, opacity)
+            qr_fg = elem.get("qr_color", "#000000")
+            qr_bg = elem.get("qr_bg_color", "#FFFFFF")
+            qr_font = elem.get("qr_font_family", "Inter")
+            qr_fsize = float(elem.get("qr_font_size", 7.0) or 7.0)
+            qr_tcolor = elem.get("qr_text_color", "#1E293B")
+            draw_qr_code(
+                c, qr_text, qr_label, qr_label_pos, pt_x, pt_y, pt_w, pt_h,
+                opacity=opacity, fg_color=qr_fg, bg_color=qr_bg,
+                font_family=qr_font, font_size=qr_fsize, text_color=qr_tcolor,
+            )
             c.restoreState()
             continue
 
@@ -762,13 +848,18 @@ def draw_badge_contents(
 
         if total_w > max_w and max_w > 0:
             scale_ratio = max_w / total_w
-            font_size = max(5.0, font_size * scale_ratio)
+            font_size = max(4.0, font_size * scale_ratio)
             c.setFont(font_name, font_size)
             if char_space_pt > 0:
                 char_space_pt = char_space_pt * scale_ratio
                 c._charSpace = char_space_pt
             base_w = c.stringWidth(text_content, font_name, font_size)
             total_w = base_w + (max(0, len(text_content) - 1) * char_space_pt if char_space_pt > 0 else 0)
+            while total_w > max_w and font_size > 4.0:
+                font_size -= 0.3
+                c.setFont(font_name, font_size)
+                base_w = c.stringWidth(text_content, font_name, font_size)
+                total_w = base_w + (max(0, len(text_content) - 1) * char_space_pt if char_space_pt > 0 else 0)
 
         # Accurate optical baseline alignment (0.35 * font_size below center)
         mid_y = pt_y + (pt_h / 2.0)

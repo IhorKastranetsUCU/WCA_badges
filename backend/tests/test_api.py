@@ -153,3 +153,25 @@ def test_render_badges_pdf_multiple_competitors():
     assert len(pdf_bytes_a4) > 1000
     assert pdf_bytes_a4.count(b"/Type /Page\n") == 7 or pdf_bytes_a4.count(b"/Type /Page") >= 7
 
+
+@pytest.mark.asyncio
+async def test_delete_competitor_endpoint():
+    from httpx import AsyncClient, ASGITransport
+    from app.main import app
+    from app.services.csv_parser import parse_wca_csv
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Create a competitor via manual
+        res = await ac.post("/api/competitors/manual", json={"name_latin": "Delete Me", "country_iso2": "UA"})
+        assert res.status_code == 201
+        comp_id = res.json()["id"]
+
+        # Delete it
+        del_res = await ac.delete(f"/api/competitors/{comp_id}")
+        assert del_res.status_code == 200
+        assert del_res.json()["status"] == "deleted"
+
+        # Deleting again should 404
+        del_res2 = await ac.delete(f"/api/competitors/{comp_id}")
+        assert del_res2.status_code == 404
+

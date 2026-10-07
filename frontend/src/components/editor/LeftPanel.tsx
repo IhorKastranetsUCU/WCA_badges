@@ -11,8 +11,7 @@ import {
   Search,
   Camera,
   Loader2,
-  ClipboardCheck,
-  RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { BadgeDimensions, BadgePreset } from "@/types/badge";
 import { Competitor } from "@/types/competitor";
@@ -32,9 +31,7 @@ interface LeftPanelProps {
   onUploadCompetitorAvatar?: (competitorId: string, file: File) => void;
   isFetchingAvatars?: boolean;
   onAddAdditionalQrCode?: () => void;
-  onUploadAssignmentsPdf?: (file: File) => void;
-  isUploadingAssignments?: boolean;
-  assignmentStatusMessage?: string | null;
+  onDeleteCompetitor?: (competitorId: string) => void;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -52,12 +49,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   onUploadCompetitorAvatar,
   isFetchingAvatars = false,
   onAddAdditionalQrCode,
-  onUploadAssignmentsPdf,
-  isUploadingAssignments = false,
-  assignmentStatusMessage,
+  onDeleteCompetitor,
 }) => {
   const csvInputRef = useRef<HTMLInputElement>(null);
-  const assignmentsPdfInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
@@ -168,48 +162,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500" />
         </div>
 
-        {/* Upload Competitor Cards PDF (.pdf) */}
-        {onUploadAssignmentsPdf && (
-          <div
-            onClick={() => assignmentsPdfInputRef.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (e.dataTransfer.files?.[0]) onUploadAssignmentsPdf(e.dataTransfer.files[0]);
-            }}
-            className="group border border-slate-200 hover:border-purple-400 hover:bg-purple-50/40 rounded-xl p-2.5 flex items-center gap-2.5 transition-all cursor-pointer"
-          >
-            <input
-              type="file"
-              ref={assignmentsPdfInputRef}
-              onChange={(e) =>
-                e.target.files?.[0] && onUploadAssignmentsPdf(e.target.files[0])
-              }
-              accept=".pdf,application/pdf"
-              className="hidden"
-            />
-            <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
-              {isUploadingAssignments ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-purple-600" />
-              ) : (
-                <ClipboardCheck className="w-4 h-4" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                <span>Upload Cards PDF (.pdf)</span>
-                <span className="text-[9px] bg-purple-100 text-purple-700 px-1 py-0.2 rounded font-bold">
-                  Groupifier
-                </span>
-              </div>
-              <div className="text-[10px] text-slate-400 truncate">
-                {assignmentStatusMessage || "Assign tasks for badge back side"}
-              </div>
-            </div>
-            <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-500" />
-          </div>
-        )}
-
         {/* Add Custom Person Button */}
         <button
           type="button"
@@ -276,28 +228,47 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           {isSearchOpen && searchResults.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-30 max-h-48 overflow-y-auto">
               {searchResults.map(({ comp, idx }) => (
-                <button
+                <div
                   key={comp.id}
-                  type="button"
-                  onClick={() => {
-                    onParticipantChange(idx);
-                    setSearchQuery("");
-                    setIsSearchOpen(false);
-                  }}
-                  className={`w-full text-left p-2 text-xs hover:bg-blue-50 transition-colors flex items-center justify-between border-b border-slate-100 last:border-0 ${
+                  className={`w-full p-2 text-xs hover:bg-blue-50 transition-colors flex items-center justify-between border-b border-slate-100 last:border-0 ${
                     idx === currentParticipantIndex ? "bg-blue-50 font-bold" : ""
                   }`}
                 >
-                  <div className="truncate mr-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onParticipantChange(idx);
+                      setSearchQuery("");
+                      setIsSearchOpen(false);
+                    }}
+                    className="flex-1 text-left min-w-0 mr-2"
+                  >
                     <div className="text-slate-800 truncate">{comp.name_latin}</div>
                     <div className="text-[10px] text-slate-400">
                       ID: #{comp.registrant_id ?? comp.csv_index ?? idx + 1} • {comp.wca_id || "No WCA ID"}
                     </div>
+                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 bg-slate-100 rounded">
+                      {comp.country_iso2 || "UA"}
+                    </span>
+                    {onDeleteCompetitor && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Delete attendee "${comp.name_latin}"?`)) {
+                            onDeleteCompetitor(comp.id);
+                          }
+                        }}
+                        title="Delete attendee"
+                        className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
-                  <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 bg-slate-100 rounded">
-                    {comp.country_iso2 || "UA"}
-                  </span>
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -307,7 +278,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
         {(() => {
           const currComp = competitors[currentParticipantIndex];
           return (
-            <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-200">
               <button
                 type="button"
                 disabled={currentParticipantIndex <= 0}
@@ -362,14 +333,31 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled={currentParticipantIndex >= total - 1}
-                onClick={() => onParticipantChange(currentParticipantIndex + 1)}
-                className="p-1.5 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-all cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentParticipantIndex >= total - 1}
+                  onClick={() => onParticipantChange(currentParticipantIndex + 1)}
+                  className="p-1.5 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-all cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                {currComp && onDeleteCompetitor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Delete attendee "${currComp.name_latin}"?`)) {
+                        onDeleteCompetitor(currComp.id);
+                      }
+                    }}
+                    title="Delete this attendee"
+                    className="p-1.5 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           );
         })()}

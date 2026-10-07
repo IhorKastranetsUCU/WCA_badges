@@ -24,6 +24,29 @@ export interface BadgeRendererProps {
   scheduleData?: any;
 }
 
+function getFittedFontSizePx(
+  text: string,
+  maxWidthPx: number,
+  initialFontSizePx: number,
+  fontFamily: string = "Inter",
+  fontWeight: string = "600"
+): number {
+  if (!text || maxWidthPx <= 0 || initialFontSizePx <= 0) return initialFontSizePx;
+  try {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return initialFontSizePx;
+    let size = initialFontSizePx;
+    ctx.font = `${fontWeight} ${size}px "${fontFamily}", sans-serif`;
+    const measured = ctx.measureText(text).width;
+    if (measured <= maxWidthPx) return size;
+    const ratio = maxWidthPx / measured;
+    return Math.max(6.0, size * ratio * 0.96);
+  } catch {
+    return initialFontSizePx;
+  }
+}
+
 export const BadgeRenderer: React.FC<BadgeRendererProps> = ({
   dimensions,
   elements,
@@ -238,11 +261,22 @@ export const BadgeRenderer: React.FC<BadgeRendererProps> = ({
                   )}
                 </div>
               ) : elem.type === "qr_code" ? (
-                <div className="w-full h-full pointer-events-none flex flex-col items-center justify-center p-1 bg-white rounded shadow-sm border border-slate-200">
+                <div
+                  style={{
+                    backgroundColor: elem.qr_bg_color || "#FFFFFF",
+                  }}
+                  className="w-full h-full pointer-events-none flex flex-col items-center justify-center p-1 rounded shadow-sm border border-slate-200"
+                >
                   {elem.qr_label && elem.qr_label_position !== "bottom" && (
                     <div
-                      style={{ fontSize: `${Math.max(6, Math.min(10, elemWPx * 0.11))}px` }}
-                      className="font-bold text-slate-900 tracking-wider text-center truncate mb-0.5 uppercase"
+                      style={{
+                        fontFamily: elem.qr_font_family || "Inter",
+                        fontSize: elem.qr_font_size
+                          ? `${elem.qr_font_size * (25.4 / 72) * scale}px`
+                          : `${Math.max(6, Math.min(10, elemWPx * 0.11))}px`,
+                        color: elem.qr_text_color || "#0F172A",
+                      }}
+                      className="font-bold tracking-wider text-center truncate mb-0.5 uppercase"
                     >
                       {elem.qr_label}
                     </div>
@@ -255,14 +289,22 @@ export const BadgeRenderer: React.FC<BadgeRendererProps> = ({
                           ? `https://www.worldcubeassociation.org/persons/${competitor.wca_id}`
                           : "https://live.worldcubeassociation.org")
                       }
+                      fgColor={elem.qr_color || "#000000"}
+                      bgColor={elem.qr_bg_color || "#FFFFFF"}
                       size={Math.max(10, Math.min(elemWPx - 8, elemHPx - (elem.qr_label ? 16 : 8)))}
                       level="M"
                     />
                   </div>
                   {elem.qr_label && elem.qr_label_position === "bottom" && (
                     <div
-                      style={{ fontSize: `${Math.max(6, Math.min(10, elemWPx * 0.11))}px` }}
-                      className="font-bold text-slate-900 tracking-wider text-center truncate mt-0.5 uppercase"
+                      style={{
+                        fontFamily: elem.qr_font_family || "Inter",
+                        fontSize: elem.qr_font_size
+                          ? `${elem.qr_font_size * (25.4 / 72) * scale}px`
+                          : `${Math.max(6, Math.min(10, elemWPx * 0.11))}px`,
+                        color: elem.qr_text_color || "#0F172A",
+                      }}
+                      className="font-bold tracking-wider text-center truncate mt-0.5 uppercase"
                     >
                       {elem.qr_label}
                     </div>
@@ -280,40 +322,56 @@ export const BadgeRenderer: React.FC<BadgeRendererProps> = ({
                   />
                 </div>
               ) : (
-                <div
-                  style={{
-                    fontFamily:
-                      elem.type === "role"
-                        ? roleStyle?.font_family || "Inter"
-                        : style?.font_family || "Inter",
-                    fontSize: `${fontSizePx}px`,
-                    fontWeight:
-                      elem.type === "role"
-                        ? roleStyle?.font_weight || "600"
-                        : style?.font_weight || "600",
-                    fontStyle:
-                      (elem.type === "role" ? roleStyle?.italic : style?.italic) ? "italic" : "normal",
-                    color:
-                      elem.type === "role"
-                        ? roleStyle?.text_color || "#FFFFFF"
-                        : style?.text_color || "#111827",
-                    textAlign,
-                    justifyContent:
-                      textAlign === "left"
-                        ? "flex-start"
-                        : textAlign === "right"
-                        ? "flex-end"
-                        : "center",
-                    letterSpacing: style?.letter_spacing_mm
-                      ? `${style.letter_spacing_mm * scale}px`
-                      : undefined,
-                    paddingLeft: `${padPx}px`,
-                    paddingRight: `${padPx}px`,
-                  }}
-                  className="w-full h-full flex items-center truncate pointer-events-none select-none"
-                >
-                  {contentText}
-                </div>
+                (() => {
+                  const fontFamily =
+                    elem.type === "role"
+                      ? roleStyle?.font_family || "Inter"
+                      : style?.font_family || "Inter";
+                  const fontWeight =
+                    elem.type === "role"
+                      ? roleStyle?.font_weight || "600"
+                      : style?.font_weight || "600";
+                  const maxTextW = Math.max(10, elemWPx - 2 * padPx);
+                  const effectiveFontSizePx = getFittedFontSizePx(
+                    contentText,
+                    maxTextW,
+                    fontSizePx,
+                    fontFamily,
+                    String(fontWeight)
+                  );
+
+                  return (
+                    <div
+                      style={{
+                        fontFamily,
+                        fontSize: `${effectiveFontSizePx}px`,
+                        fontWeight,
+                        fontStyle:
+                          (elem.type === "role" ? roleStyle?.italic : style?.italic) ? "italic" : "normal",
+                        color:
+                          elem.type === "role"
+                            ? roleStyle?.text_color || "#FFFFFF"
+                            : style?.text_color || "#111827",
+                        textAlign,
+                        justifyContent:
+                          textAlign === "left"
+                            ? "flex-start"
+                            : textAlign === "right"
+                            ? "flex-end"
+                            : "center",
+                        letterSpacing: style?.letter_spacing_mm
+                          ? `${style.letter_spacing_mm * scale}px`
+                          : undefined,
+                        paddingLeft: `${padPx}px`,
+                        paddingRight: `${padPx}px`,
+                        whiteSpace: "nowrap",
+                      }}
+                      className="w-full h-full flex items-center truncate pointer-events-none select-none"
+                    >
+                      {contentText}
+                    </div>
+                  );
+                })()
               )}
 
               {/* Resize handles when selected */}

@@ -146,6 +146,24 @@ async def update_competitor_avatar(
     return CompetitorOut.model_validate(comp)
 
 
+@router.delete("/{competitor_id}")
+async def delete_competitor(
+    competitor_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Deletes an individual competitor from the database.
+    """
+    result = await db.execute(select(Competitor).where(Competitor.id == competitor_id))
+    comp = result.scalars().first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    await db.delete(comp)
+    await db.commit()
+    return {"status": "deleted", "id": competitor_id}
+
+
 @router.post("/fetch-wca-avatars", response_model=CompetitorBatchAvatarsResponse)
 async def fetch_wca_avatars(
     db: AsyncSession = Depends(get_db),

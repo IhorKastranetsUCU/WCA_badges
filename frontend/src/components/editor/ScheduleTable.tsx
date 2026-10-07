@@ -29,86 +29,86 @@ const DEFAULT_DAYS: ScheduleDay[] = [
   {
     dayName: "Thursday",
     entries: [
-      { time: "9:00", event: "3x3 OH R1 - G1" },
-      { time: "9:20", event: "3x3 OH R1 - G2", task: "C" },
-      { time: "9:45", event: "3x3 OH R1 - G3" },
-      { time: "9:55", event: "3x3 FM A1" },
-      { time: "10:05", event: "3x3 OH R1 - G4" },
-      { time: "10:30", event: "3x3 OH R1 - G5" },
-      { time: "10:50", event: "3x3 OH R1 - G6" },
-      { time: "11:15", event: "7x7 R1 - G1" },
-      { time: "11:45", event: "7x7 R1 - G2" },
+      { time: "9:00", event: "3x3 OH Round 1 - G1" },
+      { time: "9:20", event: "3x3 OH Round 1 - G2", task: "C" },
+      { time: "9:45", event: "3x3 OH Round 1 - G3" },
+      { time: "9:55", event: "3x3 FM Attempt 1" },
+      { time: "10:05", event: "3x3 OH Round 1 - G4" },
+      { time: "10:30", event: "3x3 OH Round 1 - G5" },
+      { time: "10:50", event: "3x3 OH Round 1 - G6" },
+      { time: "11:15", event: "7x7 Round 1 - G1" },
+      { time: "11:45", event: "7x7 Round 1 - G2" },
       { time: "12:15", event: "OPENING", isBreak: true },
       { time: "12:45", event: "LUNCH", isBreak: true },
-      { time: "13:40", event: "4x4x4 R1 - G1" },
-      { time: "14:05", event: "4x4x4 R1 - G2" },
-      { time: "14:30", event: "4x4x4 R1 - G3" },
-      { time: "14:55", event: "4x4x4 R1 - G4" },
-      { time: "15:20", event: "4x4x4 R1 - G5" },
-      { time: "15:45", event: "4x4x4 R1 - G6", task: "C" },
-      { time: "16:10", event: "Clock R1 - G1" },
-      { time: "16:30", event: "Clock R1 - G2" },
-      { time: "16:50", event: "Clock R1 - G3" },
-      { time: "17:15", event: "Clock R1 - G4", task: "C" },
-      { time: "17:35", event: "3x3 OH R2" },
-      { time: "18:00", event: "4x4x4 R2", task: "QR" },
+      { time: "13:40", event: "4x4x4 Round 1 - G1" },
+      { time: "14:05", event: "4x4x4 Round 1 - G2" },
+      { time: "14:30", event: "4x4x4 Round 1 - G3" },
+      { time: "14:55", event: "4x4x4 Round 1 - G4" },
+      { time: "15:20", event: "4x4x4 Round 1 - G5" },
+      { time: "15:45", event: "4x4x4 Round 1 - G6", task: "C" },
+      { time: "16:10", event: "Clock Round 1 - G1" },
+      { time: "16:30", event: "Clock Round 1 - G2" },
+      { time: "16:50", event: "Clock Round 1 - G3" },
+      { time: "17:15", event: "Clock Round 1 - G4", task: "C" },
+      { time: "17:35", event: "3x3 OH Round 2" },
+      { time: "18:00", event: "4x4x4 Round 2", task: "QR" },
       { time: "18:50", event: "DINNER", isBreak: true },
     ],
   },
   {
     dayName: "Friday",
     entries: [
-      { time: "9:00", event: "Skewb R1 - G1" },
-      { time: "9:15", event: "Skewb R1 - G2" },
-      { time: "9:30", event: "3x3 FM A2", task: "C" },
-      { time: "9:35", event: "Skewb R1 - G3" },
-      { time: "9:50", event: "Skewb R1 - G4" },
-      { time: "10:10", event: "Skewb R1 - G5" },
-      { time: "10:25", event: "Skewb R1 - G6" },
-      { time: "10:45", event: "6x6 R1 - G1" },
-      { time: "11:15", event: "6x6 R1 - G2" },
-      { time: "11:40", event: "3x3 BF R1 - G1" },
-      { time: "12:00", event: "3x3 BF R1 - G2", task: "C" },
+      { time: "9:00", event: "Skewb Round 1 - G1" },
+      { time: "9:15", event: "Skewb Round 1 - G2" },
+      { time: "9:30", event: "3x3 FM Attempt 2", task: "C" },
+      { time: "9:35", event: "Skewb Round 1 - G3" },
+      { time: "9:50", event: "Skewb Round 1 - G4" },
+      { time: "10:10", event: "Skewb Round 1 - G5" },
+      { time: "10:25", event: "Skewb Round 1 - G6" },
+      { time: "10:45", event: "6x6 Round 1 - G1" },
+      { time: "11:15", event: "6x6 Round 1 - G2" },
+      { time: "11:40", event: "3x3 BF Round 1 - G1" },
+      { time: "12:00", event: "3x3 BF Round 1 - G2", task: "C" },
       { time: "12:20", event: "LUNCH", isBreak: true },
-      { time: "13:20", event: "Sq-1 R1 - G1", task: "C" },
-      { time: "13:40", event: "Sq-1 R1 - G2" },
-      { time: "14:00", event: "Sq-1 R1 - G3" },
-      { time: "14:20", event: "2x2x2 R1 - G1" },
-      { time: "14:35", event: "2x2x2 R1 - G2", task: "C" },
-      { time: "15:00", event: "2x2x2 R1 - G3" },
-      { time: "15:20", event: "3x3 MBF A2" },
-      { time: "15:30", event: "2x2x2 R1 - G5" },
-      { time: "16:10", event: "2x2x2 R1 - G7" },
-      { time: "16:30", event: "Mega R1 - G1" },
-      { time: "16:55", event: "Mega R1 - G2", task: "C" },
+      { time: "13:20", event: "Sq-1 Round 1 - G1", task: "C" },
+      { time: "13:40", event: "Sq-1 Round 1 - G2" },
+      { time: "14:00", event: "Sq-1 Round 1 - G3" },
+      { time: "14:20", event: "2x2x2 Round 1 - G1" },
+      { time: "14:35", event: "2x2x2 Round 1 - G2", task: "C" },
+      { time: "15:00", event: "2x2x2 Round 1 - G3" },
+      { time: "15:20", event: "3x3 MBF Attempt 2" },
+      { time: "15:30", event: "2x2x2 Round 1 - G5" },
+      { time: "16:10", event: "2x2x2 Round 1 - G7" },
+      { time: "16:30", event: "Mega Round 1 - G1" },
+      { time: "16:55", event: "Mega Round 1 - G2", task: "C" },
       { time: "18:20", event: "3x3 OH Final", task: "QR" },
     ],
   },
   {
     dayName: "Saturday",
     entries: [
-      { time: "9:00", event: "5x5x5 R1 - G1" },
+      { time: "9:00", event: "5x5x5 Round 1 - G1" },
       { time: "9:10", event: "4BLD Final" },
-      { time: "9:25", event: "5x5x5 R1 - G2" },
-      { time: "9:55", event: "5x5x5 R1 - G3", task: "C" },
-      { time: "10:20", event: "5x5x5 R1 - G4" },
-      { time: "10:50", event: "Pyra R1 - G1" },
-      { time: "11:05", event: "Pyra R1 - G2" },
-      { time: "11:25", event: "Pyra R1 - G3" },
+      { time: "9:25", event: "5x5x5 Round 1 - G2" },
+      { time: "9:55", event: "5x5x5 Round 1 - G3", task: "C" },
+      { time: "10:20", event: "5x5x5 Round 1 - G4" },
+      { time: "10:50", event: "Pyra Round 1 - G1" },
+      { time: "11:05", event: "Pyra Round 1 - G2" },
+      { time: "11:25", event: "Pyra Round 1 - G3" },
       { time: "11:35", event: "5BLD Final" },
-      { time: "11:40", event: "Pyra R1 - G4" },
-      { time: "12:00", event: "Pyra R1 - G5" },
-      { time: "12:15", event: "Pyra R1 - G6", task: "C" },
+      { time: "11:40", event: "Pyra Round 1 - G4" },
+      { time: "12:00", event: "Pyra Round 1 - G5" },
+      { time: "12:15", event: "Pyra Round 1 - G6", task: "C" },
       { time: "12:35", event: "LUNCH", isBreak: true },
-      { time: "13:35", event: "2x2x2 R2", task: "QR" },
-      { time: "14:20", event: "Skewb R2" },
-      { time: "14:40", event: "3x3x3 R1 - G1" },
-      { time: "15:00", event: "3x3 FM A3", task: "C" },
-      { time: "15:25", event: "3x3x3 R1 - G3" },
-      { time: "15:45", event: "3x3x3 R1 - G4" },
-      { time: "16:30", event: "3x3x3 R1 - G6", task: "C" },
-      { time: "16:55", event: "3x3x3 R1 - G7" },
-      { time: "17:15", event: "3x3x3 R1 - G8" },
+      { time: "13:35", event: "2x2x2 Round 2", task: "QR" },
+      { time: "14:20", event: "Skewb Round 2" },
+      { time: "14:40", event: "3x3x3 Round 1 - G1" },
+      { time: "15:00", event: "3x3 FM Attempt 3", task: "C" },
+      { time: "15:25", event: "3x3x3 Round 1 - G3" },
+      { time: "15:45", event: "3x3x3 Round 1 - G4" },
+      { time: "16:30", event: "3x3x3 Round 1 - G6", task: "C" },
+      { time: "16:55", event: "3x3x3 Round 1 - G7" },
+      { time: "17:15", event: "3x3x3 Round 1 - G8" },
       { time: "17:50", event: "6x6x6 Final" },
       { time: "18:15", event: "Skewb Final", task: "QR" },
     ],
@@ -116,15 +116,15 @@ const DEFAULT_DAYS: ScheduleDay[] = [
   {
     dayName: "Sunday",
     entries: [
-      { time: "10:00", event: "3x3x3 R2 - G1" },
-      { time: "10:20", event: "3x3x3 R2 - G2" },
-      { time: "10:50", event: "3x3x3 R2 - G3" },
-      { time: "11:10", event: "3x3x3 R2 - G4", task: "QR" },
-      { time: "11:30", event: "5x5x5 R2" },
-      { time: "12:00", event: "Pyraminx R2" },
-      { time: "12:20", event: "3x3x3 BF R2" },
-      { time: "12:40", event: "Square-1 R2" },
-      { time: "13:00", event: "3x3x3 Semi" },
+      { time: "10:00", event: "3x3x3 Round 2 - G1" },
+      { time: "10:20", event: "3x3x3 Round 2 - G2" },
+      { time: "10:50", event: "3x3x3 Round 2 - G3" },
+      { time: "11:10", event: "3x3x3 Round 2 - G4", task: "QR" },
+      { time: "11:30", event: "5x5x5 Round 2" },
+      { time: "12:00", event: "Pyraminx Round 2" },
+      { time: "12:20", event: "3x3x3 BF Round 2" },
+      { time: "12:40", event: "Square-1 Round 2" },
+      { time: "13:00", event: "3x3x3 Semifinal" },
       { time: "13:25", event: "LUNCH", isBreak: true },
       { time: "14:25", event: "5x5x5 Final" },
       { time: "14:50", event: "3x3 BF Final" },
@@ -135,6 +135,19 @@ const DEFAULT_DAYS: ScheduleDay[] = [
     ],
   },
 ];
+
+export function formatScheduleEventName(name: string): string {
+  let cleaned = String(name || "");
+  cleaned = cleaned.replace(/\bR1\b/g, "Round 1");
+  cleaned = cleaned.replace(/\bR2\b/g, "Round 2");
+  cleaned = cleaned.replace(/\bR3\b/g, "Round 3");
+  cleaned = cleaned.replace(/\bR4\b/g, "Round 4");
+  cleaned = cleaned.replace(/\bA1\b/g, "Attempt 1");
+  cleaned = cleaned.replace(/\bA2\b/g, "Attempt 2");
+  cleaned = cleaned.replace(/\bA3\b/g, "Attempt 3");
+  cleaned = cleaned.replace(/\bSemi\b/g, "Semifinal");
+  return cleaned;
+}
 
 export function resolveCompetitorTask(
   entry: ScheduleEntry,
@@ -193,18 +206,18 @@ export function resolveCompetitorTask(
 
   if (groupMatch) {
     const gNum = groupMatch[1];
-    if (compGroups.includes(gNum)) return "C";
-    if (scrGroups.includes(gNum)) return "S";
-    if (judgeGroups.includes(gNum)) return "J";
-    if (runnerGroups.includes(gNum)) return "R";
+    if (compGroups.includes(gNum)) return `C ${gNum}`;
+    if (scrGroups.includes(gNum)) return `S ${gNum}`;
+    if (judgeGroups.includes(gNum)) return `J ${gNum}`;
+    if (runnerGroups.includes(gNum)) return `R ${gNum}`;
     return "";
   }
 
   // Round-level:
-  if (compGroups.length > 0) return "C";
-  if (scrGroups.length > 0) return "S";
-  if (judgeGroups.length > 0) return "J";
-  if (runnerGroups.length > 0) return "R";
+  if (compGroups.length > 0) return `C ${compGroups[0]}`;
+  if (scrGroups.length > 0) return `S ${scrGroups[0]}`;
+  if (judgeGroups.length > 0) return `J ${judgeGroups[0]}`;
+  if (runnerGroups.length > 0) return `R ${runnerGroups[0]}`;
 
   return "";
 }
@@ -233,20 +246,23 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
 
   const getTaskBadgeStyle = (task?: string) => {
     if (!task) return "";
-    switch (task.toUpperCase()) {
-      case "C":
-        return "bg-rose-200 text-rose-900 font-bold border border-rose-300";
-      case "J":
-        return "bg-blue-200 text-blue-900 font-bold border border-blue-300";
-      case "S":
-        return "bg-amber-200 text-amber-900 font-bold border border-amber-300";
-      case "R":
-        return "bg-emerald-200 text-emerald-900 font-bold border border-emerald-300";
-      case "QR":
-        return "bg-slate-200 text-slate-800 font-bold";
-      default:
-        return "bg-slate-100 text-slate-700 font-semibold";
+    const t = task.trim().toUpperCase();
+    if (t.startsWith("S")) {
+      return "bg-red-600 text-white font-extrabold border border-red-700 shadow-xs";
     }
+    if (t.startsWith("J")) {
+      return "bg-amber-400 text-amber-950 font-extrabold border border-amber-500 shadow-xs";
+    }
+    if (t.startsWith("C")) {
+      return "bg-blue-600 text-white font-extrabold border border-blue-700 shadow-xs";
+    }
+    if (t.startsWith("R")) {
+      return "bg-emerald-600 text-white font-extrabold border border-emerald-700 shadow-xs";
+    }
+    if (t === "QR") {
+      return "bg-slate-200 text-slate-800 font-bold";
+    }
+    return "bg-slate-100 text-slate-700 font-semibold";
   };
 
   const displayTitle = title || (isRealSchedule ? customData?.competition_name : null);
@@ -291,19 +307,20 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
             {/* Day Header */}
             <div
               style={{ fontSize: `${headerFontSize}px` }}
-              className="bg-slate-700 text-white font-bold text-center py-0.5 px-0.5 truncate uppercase tracking-tight shrink-0"
+              className="bg-slate-700 text-white font-bold text-center py-0.5 px-1 truncate uppercase tracking-tight shrink-0 whitespace-nowrap"
+              title={day.dayName}
             >
               {day.dayName}
             </div>
 
             {/* Subheader: Time / Event / Task */}
             <div
-              style={{ fontSize: `${rowFontSize * 0.9}px` }}
+              style={{ fontSize: `${Math.max(6, rowFontSize * 0.88)}px` }}
               className="bg-slate-200 text-slate-700 font-bold flex items-center border-b border-slate-300 py-0.5 px-0.5 shrink-0"
             >
               <span className="w-[28%] text-left truncate">Time</span>
-              <span className="w-[52%] text-left truncate">Event</span>
-              <span className="w-[20%] text-center truncate">Task</span>
+              <span className="w-[48%] text-left truncate">Event</span>
+              <span className="w-[24%] text-center truncate">Task</span>
             </div>
 
             {/* Entries List with equal distribution (gap-less) */}
@@ -318,6 +335,8 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
                   : isRealSchedule
                   ? ""
                   : entry.task || "";
+
+                const formattedEvent = formatScheduleEventName(entry.event);
 
                 return (
                   <div
@@ -340,19 +359,24 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
                     }`}
                   >
                     {isBreak ? (
-                      <span className="w-full text-center truncate tracking-tight">{entry.event}</span>
+                      <span className="w-full text-center truncate tracking-tight" title={formattedEvent}>
+                        {formattedEvent}
+                      </span>
                     ) : (
                       <>
                         <span className="w-[28%] font-mono text-[0.9em] text-slate-600 truncate">
                           {entry.time}
                         </span>
-                        <span className="w-[52%] truncate font-medium text-slate-800">
-                          {entry.event}
+                        <span
+                          className="w-[48%] truncate font-medium text-slate-800"
+                          title={formattedEvent}
+                        >
+                          {formattedEvent}
                         </span>
-                        <span className="w-[20%] flex items-center justify-center">
+                        <span className="w-[24%] flex items-center justify-center">
                           {taskToRender ? (
                             <span
-                              className={`px-1 rounded text-[0.85em] leading-tight ${getTaskBadgeStyle(
+                              className={`px-1 py-0.2 rounded text-[0.8em] font-extrabold tracking-tight ${getTaskBadgeStyle(
                                 taskToRender
                               )}`}
                             >
