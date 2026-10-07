@@ -87,3 +87,4 @@ class ManualCompetitorCreate(BaseModel):
     country_name: str = "Ukraine"
     role_id: Optional[str] = "r-participant"
     custom_role_name: Optional[str] = None
+    avatar_url: Optional[str] = None

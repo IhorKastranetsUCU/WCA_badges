@@ -91,3 +91,4 @@ class ExportPDFRequest(BaseModel):
     template_override: Optional[Dict[str, Any]] = None
     competitors: Optional[List[Dict[str, Any]]] = None
     roles: Optional[List[Dict[str, Any]]] = None
+    schedule_data: Optional[Dict[str, Any]] = None

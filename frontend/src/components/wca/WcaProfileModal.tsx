@@ -24,32 +24,16 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
 }) => {
   const [personalToken, setPersonalToken] = useState("");
   const [oauthCode, setOauthCode] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"quick" | "token" | "oauth">("quick");
+  const [activeTab, setActiveTab] = useState<"token" | "oauth">("token");
 
   if (!isOpen) return null;
-
-  const handleQuickConnect = async (demoRole: "delegate" | "organizer") => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(getApiUrl("/api/wca/login"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ demo_role: demoRole }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        onLogin(data.access_token, data.profile, data.competitions);
-        onClose();
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleTokenConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!personalToken.trim()) return;
+    setErrorMessage("");
     setIsLoading(true);
     try {
       const res = await fetch(getApiUrl("/api/wca/login"), {
@@ -61,7 +45,14 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
         const data = await res.json();
         onLogin(data.access_token, data.profile, data.competitions);
         onClose();
+      } else {
+        const errData = await res.json().catch(() => null);
+        setErrorMessage(
+          errData?.detail || "Invalid WCA Token. Please verify your Personal Access Token in WCA account settings."
+        );
       }
+    } catch (err: any) {
+      setErrorMessage(`Connection error: ${err.message || "Failed to contact server"}`);
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +104,12 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
         const data = await res.json();
         onLogin(data.access_token, data.profile, data.competitions);
         onClose();
+      } else {
+        const errData = await res.json().catch(() => null);
+        setErrorMessage(errData?.detail || "Failed to exchange OAuth code.");
       }
+    } catch (err: any) {
+      setErrorMessage(`OAuth error: ${err.message || "Failed to connect"}`);
     } finally {
       setIsLoading(false);
     }
@@ -259,15 +255,6 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
             <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button
                 type="button"
-                onClick={() => setActiveTab("quick")}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  activeTab === "quick" ? "bg-white text-blue-600 shadow-sm" : "text-slate-600"
-                }`}
-              >
-                Quick Connect
-              </button>
-              <button
-                type="button"
                 onClick={() => setActiveTab("token")}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                   activeTab === "token" ? "bg-white text-blue-600 shadow-sm" : "text-slate-600"
@@ -286,56 +273,10 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
               </button>
             </div>
 
-            {/* Quick Connect for instant testing of Delegate / Organizer flow */}
-            {activeTab === "quick" && (
-              <div className="space-y-3 animate-fadeIn">
-                <p className="text-xs text-slate-500">
-                  Select a verified profile to instantly load competitions where you have an assigned role:
-                </p>
-
-                <div
-                  onClick={() => handleQuickConnect("delegate")}
-                  className="p-3.5 rounded-xl border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/30 flex items-center justify-between cursor-pointer transition-all group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
-                      IS
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-700">
-                        Ihor Shevchenko (2018SHEV01)
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        Assigned as: <span className="font-semibold text-emerald-600">WCA Delegate & Organizer</span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-600 group-hover:translate-x-0.5 transition-transform">
-                    Connect →
-                  </span>
-                </div>
-
-                <div
-                  onClick={() => handleQuickConnect("organizer")}
-                  className="p-3.5 rounded-xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50/30 flex items-center justify-between cursor-pointer transition-all group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
-                      OM
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 group-hover:text-blue-700">
-                        Oleksandr Mazur (2019MAZU01)
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        Assigned as: <span className="font-semibold text-blue-600">Competition Organizer</span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-blue-600 group-hover:translate-x-0.5 transition-transform">
-                    Connect →
-                  </span>
-                </div>
+            {/* Error Message if connection fails */}
+            {errorMessage && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium animate-fadeIn">
+                {errorMessage}
               </div>
             )}
 

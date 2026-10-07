@@ -5,8 +5,8 @@ A full-stack, production-grade monorepo web application designed to generate, pr
 ---
 
 ## 1. Quick Start (Single Command)
-
-To run the entire stack locally (Postgres, FastAPI backend with Alembic migrations, and React Vite frontend):
+*
+*To run the entire stack locally (Postgres, FastAPI backend with Alembic migrations, and React Vite frontend):
 
 ```bash
 docker compose up --build

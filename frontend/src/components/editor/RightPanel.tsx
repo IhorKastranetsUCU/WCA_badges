@@ -26,7 +26,13 @@ interface RightPanelProps {
   onAssignAll?: (roleId: string) => void;
   onSetDefaultRole?: (roleId: string) => void;
   currentCompetitorId?: string;
+  currentCompetitor?: Competitor;
+  onUploadPhoto?: (file: File) => void;
+  onRemovePhoto?: () => void;
+  onFetchWcaAvatar?: () => void;
+  isFetchingAvatar?: boolean;
   onLayerChange: (action: "bring_to_front" | "send_to_back" | "move_up" | "move_down") => void;
+  onAddAdditionalQrCode?: () => void;
 }
 
 export const RightPanel: React.FC<RightPanelProps> = ({
@@ -44,7 +50,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   onAssignAll,
   onSetDefaultRole,
   currentCompetitorId,
+  currentCompetitor,
+  onUploadPhoto,
+  onRemovePhoto,
+  onFetchWcaAvatar,
+  isFetchingAvatar = false,
   onLayerChange,
+  onAddAdditionalQrCode,
 }) => {
   const [activeTab, setActiveTab] = useState<"style" | "position">("style");
 
@@ -152,6 +164,11 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           borderWidthMm={selectedElement.border_width_mm ?? 0}
           borderColor={selectedElement.border_color ?? "#cbd5e1"}
           badgeDimensions={badgeDimensions}
+          currentCompetitor={currentCompetitor}
+          onUploadPhoto={onUploadPhoto}
+          onRemovePhoto={onRemovePhoto}
+          onFetchWcaAvatar={onFetchWcaAvatar}
+          isFetchingAvatar={isFetchingAvatar}
           onChangePosition={(patch) =>
             onUpdateElement({
               position: { ...selectedElement.position, ...patch },
@@ -183,6 +200,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           onChangeOpacity={(opacity) => onUpdateElement({ opacity })}
           onChangeQr={(patch) => onUpdateElement(patch)}
           onLayerChange={onLayerChange}
+          onAddAdditionalQrCode={onAddAdditionalQrCode}
         />
       )}
 

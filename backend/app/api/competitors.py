@@ -1,4 +1,7 @@
-from typing import List
+import asyncio
+import logging
+from typing import List, Optional
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,9 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.competitor import Competitor
 from app.models.role import Role
-from app.schemas.competitor import CompetitorOut, CSVUploadResponse
+from app.schemas.competitor import (
+    CompetitorOut,
+    CSVUploadResponse,
+    CompetitorAvatarUpdate,
+    CompetitorBatchAvatarsResponse,
+)
 from app.schemas.wca import ManualCompetitorCreate
 from app.services.csv_parser import parse_wca_csv, parse_wca_name, resolve_country_iso2
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/competitors", tags=["competitors"])
 
@@ -107,9 +117,94 @@ async def add_manual_competitor(
         country_iso2=iso2,
         country_name=country_name,
         role_id=target_role_id,
+        avatar_url=payload.avatar_url,
     )
     db.add(new_comp)
     await db.commit()
     await db.refresh(new_comp)
 
     return CompetitorOut.model_validate(new_comp)
+
+
+@router.patch("/{competitor_id}/avatar", response_model=CompetitorOut)
+async def update_competitor_avatar(
+    competitor_id: str,
+    payload: CompetitorAvatarUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Updates or removes a competitor's photo (supports WCA image URL or uploaded data URL).
+    """
+    result = await db.execute(select(Competitor).where(Competitor.id == competitor_id))
+    comp = result.scalars().first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    comp.avatar_url = payload.avatar_url
+    await db.commit()
+    await db.refresh(comp)
+    return CompetitorOut.model_validate(comp)
+
+
+@router.post("/fetch-wca-avatars", response_model=CompetitorBatchAvatarsResponse)
+async def fetch_wca_avatars(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Automatically queries WCA API for all competitors with a WCA ID.
+    If a real photo exists (is_default is False and not missing_avatar),
+    updates avatar_url. If no avatar exists on WCA, sets to None (leaves without photo).
+    """
+    result = await db.execute(select(Competitor))
+    competitors = result.scalars().all()
+
+    wca_competitors = [c for c in competitors if c.wca_id and c.wca_id.strip()]
+    if not wca_competitors:
+        return CompetitorBatchAvatarsResponse(total_checked=0, avatars_found=0, updated={})
+
+    sem = asyncio.Semaphore(8)
+    headers = {
+        "User-Agent": "WCA-Badge-Generator/1.0",
+        "Accept": "application/json",
+    }
+
+    updated_map = {}
+    avatars_found_count = 0
+
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        async def fetch_one(comp: Competitor):
+            nonlocal avatars_found_count
+            wca_id = comp.wca_id.strip().upper()
+            url = f"https://www.worldcubeassociation.org/api/v0/persons/{wca_id}"
+            async with sem:
+                try:
+                    res = await client.get(url, headers=headers)
+                    if res.status_code == 200:
+                        data = res.json()
+                        avatar_obj = data.get("person", {}).get("avatar") or {}
+                        is_default = avatar_obj.get("is_default", False)
+                        av_url = avatar_obj.get("url") or avatar_obj.get("thumb_url")
+
+                        if not is_default and av_url and "missing_avatar" not in av_url:
+                            comp.avatar_url = av_url
+                            updated_map[comp.id] = av_url
+                            avatars_found_count += 1
+                        else:
+                            # User requirement: If there are no avatar just leave it without photo
+                            comp.avatar_url = None
+                            updated_map[comp.id] = None
+                    elif res.status_code == 404:
+                        comp.avatar_url = None
+                        updated_map[comp.id] = None
+                except Exception as e:
+                    logger.warning(f"Failed to fetch WCA avatar for {wca_id}: {e}")
+
+        await asyncio.gather(*(fetch_one(c) for c in wca_competitors))
+
+    await db.commit()
+    return CompetitorBatchAvatarsResponse(
+        total_checked=len(wca_competitors),
+        avatars_found=avatars_found_count,
+        updated=updated_map,
+    )
+

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -18,6 +18,7 @@ class Competitor(Base):
     country_iso2 = Column(String(8), nullable=True)
     country_name = Column(String(100), nullable=True)
     role_id = Column(String(64), ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
+    avatar_url = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     role = relationship("Role", back_populates="competitors", lazy="selectin")

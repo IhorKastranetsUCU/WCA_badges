@@ -9,6 +9,8 @@ import {
   Trophy,
   UserPlus,
   Search,
+  Camera,
+  Loader2,
 } from "lucide-react";
 import { BadgeDimensions, BadgePreset } from "@/types/badge";
 import { Competitor } from "@/types/competitor";
@@ -25,6 +27,9 @@ interface LeftPanelProps {
   onOpenAddCustomModal: () => void;
   enabledFields: Record<string, boolean>;
   onToggleField: (field: any) => void;
+  onUploadCompetitorAvatar?: (competitorId: string, file: File) => void;
+  isFetchingAvatars?: boolean;
+  onAddAdditionalQrCode?: () => void;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -39,6 +44,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   onOpenAddCustomModal,
   enabledFields,
   onToggleField,
+  onUploadCompetitorAvatar,
+  isFetchingAvatars = false,
+  onAddAdditionalQrCode,
 }) => {
   const csvInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -232,7 +240,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                   <div className="truncate mr-2">
                     <div className="text-slate-800 truncate">{comp.name_latin}</div>
                     <div className="text-[10px] text-slate-400">
-                      ID: #{comp.registrant_id ?? comp.csv_index ?? idx + 1} • {comp.wca_id || "Newcomer"}
+                      ID: #{comp.registrant_id ?? comp.csv_index ?? idx + 1} • {comp.wca_id || "No WCA ID"}
                     </div>
                   </div>
                   <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 bg-slate-100 rounded">
@@ -245,36 +253,75 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
         </div>
 
         {/* Attendee Navigation Card */}
-        <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
-          <button
-            type="button"
-            disabled={currentParticipantIndex <= 0}
-            onClick={() => onParticipantChange(currentParticipantIndex - 1)}
-            className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-all cursor-pointer"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
+        {(() => {
+          const currComp = competitors[currentParticipantIndex];
+          return (
+            <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                disabled={currentParticipantIndex <= 0}
+                onClick={() => onParticipantChange(currentParticipantIndex - 1)}
+                className="p-1.5 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-all cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
 
-          <div className="text-center flex-1 min-w-0 px-2">
-            <div className="text-xs font-bold text-slate-800 truncate">
-              {competitors[currentParticipantIndex]?.name_latin || "No participants"}
-            </div>
-            <div className="text-[10px] text-slate-500 font-medium truncate">
-              ID: #{competitors[currentParticipantIndex]?.registrant_id ?? competitors[currentParticipantIndex]?.csv_index ?? 1} •{" "}
-              {competitors[currentParticipantIndex]?.wca_id || "Newcomer"} •{" "}
-              {competitors[currentParticipantIndex]?.country_iso2 || "UA"}
-            </div>
-          </div>
+              {/* Photo thumbnail / upload trigger */}
+              {currComp && (
+                <div className="relative group shrink-0">
+                  <input
+                    type="file"
+                    id={`left-avatar-upload-${currComp.id}`}
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && onUploadCompetitorAvatar) {
+                        onUploadCompetitorAvatar(currComp.id, file);
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                  <label
+                    htmlFor={`left-avatar-upload-${currComp.id}`}
+                    title="Upload / Change Photo"
+                    className="w-8 h-8 rounded-full border border-slate-300 bg-white flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all block relative"
+                  >
+                    {currComp.avatar_url ? (
+                      <img
+                        src={currComp.avatar_url}
+                        alt={currComp.name_latin}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Camera className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
+                    )}
+                  </label>
+                </div>
+              )}
 
-          <button
-            type="button"
-            disabled={currentParticipantIndex >= total - 1}
-            onClick={() => onParticipantChange(currentParticipantIndex + 1)}
-            className="p-2 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-all cursor-pointer"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+              <div className="text-center flex-1 min-w-0 px-1">
+                <div className="text-xs font-bold text-slate-800 truncate">
+                  {currComp?.name_latin || "No participants"}
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium truncate">
+                  ID: #{currComp?.registrant_id ?? currComp?.csv_index ?? 1} •{" "}
+                  {currComp?.wca_id || "No WCA ID"} •{" "}
+                  {currComp?.country_iso2 || "UA"}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={currentParticipantIndex >= total - 1}
+                onClick={() => onParticipantChange(currentParticipantIndex + 1)}
+                className="p-1.5 rounded-lg bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-all cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          );
+        })()}
       </section>
 
       {/* 3. Badge Size Options & Custom Dimensions */}
@@ -353,15 +400,34 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
                 }`}
               >
-                <span>{item.label}</span>
-                <div
-                  className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
-                    isActive
-                      ? "bg-blue-600 border-blue-600 text-white"
-                      : "border-slate-300 bg-white"
-                  }`}
-                >
-                  {isActive && <Check className="w-3 h-3 stroke-[3]" />}
+                <span className="flex items-center gap-1.5">
+                  {item.label}
+                  {item.key === "avatar" && isFetchingAvatars && (
+                    <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                  )}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {item.key === "qr_code" && onAddAdditionalQrCode && (
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddAdditionalQrCode();
+                      }}
+                      title="Add another QR code to badge"
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-800 transition-all cursor-pointer"
+                    >
+                      + Add
+                    </span>
+                  )}
+                  <div
+                    className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
+                      isActive
+                        ? "bg-blue-600 border-blue-600 text-white"
+                        : "border-slate-300 bg-white"
+                    }`}
+                  >
+                    {isActive && <Check className="w-3 h-3 stroke-[3]" />}
+                  </div>
                 </div>
               </button>
             );

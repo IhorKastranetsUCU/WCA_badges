@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { X, Search, Trophy, Shield, Check, RefreshCw, UserCheck } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Search, Trophy, Shield, Check, RefreshCw, UserCheck, Upload, FileCode } from "lucide-react";
 import { WCACompetition, WCARegistrationItem, WCARegistrationsCategorized, WCAProfile } from "@/types/wca";
 import { Competitor } from "@/types/competitor";
 import { CountryFlag } from "@/utils/svgFlags";
@@ -8,7 +8,7 @@ import { getApiUrl } from "@/api/config";
 interface WcaImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportCompetitors: (imported: Competitor[]) => void;
+  onImportCompetitors: (imported: Competitor[], compId?: string) => void;
   competitions: WCACompetition[];
   wcaProfile: WCAProfile | null;
   wcaToken?: string | null;
@@ -25,11 +25,48 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
   onOpenProfileModal,
 }) => {
   const [selectedCompId, setSelectedCompId] = useState<string>("");
+  const [customCompInput, setCustomCompInput] = useState<string>("");
   const [isLoadingRegs, setIsLoadingRegs] = useState<boolean>(false);
   const [categorized, setCategorized] = useState<WCARegistrationsCategorized | null>(null);
+  const groupifierInputRef = useRef<HTMLInputElement>(null);
 
   const [activeCategory, setActiveCategory] = useState<"pending" | "approved" | "cancelled">("pending");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  const handleGroupifierFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const jsonContent = JSON.parse(event.target?.result as string);
+        setUploadStatus("Uploading Groupifier / WCIF JSON...");
+        const res = await fetch(getApiUrl("/api/wca/wcif/upload"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(jsonContent),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setUploadStatus(`Loaded: ${data.name || data.competition_id} (${data.persons_count} competitors & schedule)`);
+          setSelectedCompId(data.competition_id);
+          if (data.imported_competitors && data.imported_competitors.length > 0) {
+            onImportCompetitors(data.imported_competitors, data.competition_id);
+            onClose();
+          }
+        } else {
+          setUploadStatus("Failed to load WCIF file into backend");
+        }
+      } catch {
+        setUploadStatus("Failed to parse JSON file");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
 
   // Separate competitions into actual/upcoming and archive
   const todayStr = new Date().toISOString().split("T")[0];
@@ -148,7 +185,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
 
       if (res.ok) {
         const data = await res.json();
-        onImportCompetitors(data);
+        onImportCompetitors(data, selectedCompId);
         onClose();
         return;
       }
@@ -173,7 +210,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
       };
     });
 
-    onImportCompetitors(fallbackComps);
+    onImportCompetitors(fallbackComps, selectedCompId);
     onClose();
   };
 
@@ -210,54 +247,122 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
         </div>
 
         {/* Competition Selection Bar */}
-        <div className="px-6 py-3 border-b border-slate-200 bg-white flex flex-wrap items-center gap-3">
-          <div className="flex-1 min-w-[260px]">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Your Assigned Competitions ({competitions.length})
-              </label>
-              {!wcaProfile && (
-                <button
-                  type="button"
-                  onClick={onOpenProfileModal}
-                  className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+        <div className="px-6 py-3 border-b border-slate-200 bg-white flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex-1 min-w-[280px]">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Your Assigned Competitions ({competitions.length})
+                </label>
+                {!wcaProfile && (
+                  <button
+                    type="button"
+                    onClick={onOpenProfileModal}
+                    className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    Connect Profile
+                  </button>
+                )}
+              </div>
+
+              {competitions.length > 0 ? (
+                <select
+                  value={selectedCompId}
+                  onChange={(e) => setSelectedCompId(e.target.value)}
+                  className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 >
-                  Connect Profile
-                </button>
+                  {activeCompetitions.length > 0 && (
+                    <optgroup label="⚡ Active & Upcoming Competitions">
+                      {activeCompetitions.map((comp) => (
+                        <option key={comp.id} value={comp.id}>
+                          {comp.name} ({comp.city}) — Role: {comp.user_roles?.join(" & ") || "Organizer"}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {archiveCompetitions.length > 0 && (
+                    <optgroup label="📁 Archive (Past Competitions)">
+                      {archiveCompetitions.map((comp) => (
+                        <option key={comp.id} value={comp.id}>
+                          {comp.name} ({comp.city}) — Role: {comp.user_roles?.join(" & ") || "Organizer"}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              ) : (
+                <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                  No managed competitions found. Enter ID or upload Groupifier JSON.
+                </div>
               )}
             </div>
 
-            {competitions.length > 0 ? (
-              <select
-                value={selectedCompId}
-                onChange={(e) => setSelectedCompId(e.target.value)}
-                className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                {activeCompetitions.length > 0 && (
-                  <optgroup label="⚡ Active & Upcoming Competitions">
-                    {activeCompetitions.map((comp) => (
-                      <option key={comp.id} value={comp.id}>
-                        {comp.name} ({comp.city}) — Role: {comp.user_roles?.join(" & ") || "Organizer"}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                {archiveCompetitions.length > 0 && (
-                  <optgroup label="📁 Archive (Past Competitions)">
-                    {archiveCompetitions.map((comp) => (
-                      <option key={comp.id} value={comp.id}>
-                        {comp.name} ({comp.city}) — Role: {comp.user_roles?.join(" & ") || "Organizer"}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            ) : (
-              <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                No managed competitions found. Connect your profile to load your competitions.
+            <div className="flex flex-col gap-1 min-w-[220px]">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Or WCA Competition ID
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder="e.g. UkrainianOpen2024"
+                  value={customCompInput}
+                  onChange={(e) => setCustomCompInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && customCompInput.trim()) {
+                      setSelectedCompId(customCompInput.trim());
+                    }
+                  }}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  disabled={!customCompInput.trim()}
+                  onClick={() => {
+                    if (customCompInput.trim()) {
+                      setSelectedCompId(customCompInput.trim());
+                    }
+                  }}
+                  className="px-3 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-lg cursor-pointer transition-all"
+                >
+                  Load
+                </button>
               </div>
-            )}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Groupifier / WCIF File
+              </label>
+              <button
+                type="button"
+                onClick={() => groupifierInputRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg cursor-pointer transition-all whitespace-nowrap"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Upload Groupifier (.json)
+              </button>
+              <input
+                ref={groupifierInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleGroupifierFileUpload}
+              />
+            </div>
           </div>
+
+          {uploadStatus && (
+            <div className="text-[11px] px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 flex items-center justify-between">
+              <span>{uploadStatus}</span>
+              <button
+                type="button"
+                onClick={() => setUploadStatus(null)}
+                className="text-indigo-400 hover:text-indigo-600 font-bold ml-2 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Category Tabs: Waiting List (Pending), Approved, Cancelled */}
@@ -408,7 +513,7 @@ export const WcaImportModal: React.FC<WcaImportModalProps> = ({
                       )}
                     </div>
                     <div className="text-[10px] text-slate-400 font-mono">
-                      {item.wca_id || "Newcomer"} • {item.country_name}
+                      {item.wca_id || "No WCA ID"} • {item.country_name}
                     </div>
                   </div>
                 </div>

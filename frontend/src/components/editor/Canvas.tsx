@@ -1,10 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
-import { QRCodeSVG } from "qrcode.react";
-import { User } from "lucide-react";
 import { BadgeDimensions, BadgeElement } from "@/types/badge";
 import { Competitor, Role } from "@/types/competitor";
-import { CountryFlag } from "@/utils/svgFlags";
-import { ScheduleTable } from "./ScheduleTable";
+import { BadgeRenderer } from "./BadgeRenderer";
 
 interface CanvasProps {
   dimensions: BadgeDimensions;
@@ -16,6 +13,7 @@ interface CanvasProps {
   onDeleteElement: (id: string) => void;
   currentCompetitor?: Competitor;
   roles: Role[];
+  scheduleData?: any;
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
@@ -28,6 +26,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onDeleteElement,
   currentCompetitor,
   roles,
+  scheduleData,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState<number>(4.2); // Pixels per millimeter
@@ -157,8 +156,6 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [selectedElementId, onDeleteElement]);
 
   const rolesMap = new Map(roles.map((r) => [r.id, r]));
-  const compRole = currentCompetitor?.role_id ? rolesMap.get(currentCompetitor.role_id) : roles[0];
-  const roleName = compRole?.name || "Participant";
 
   return (
     <main
@@ -175,283 +172,49 @@ export const Canvas: React.FC<CanvasProps> = ({
         <span className="text-[10px] text-slate-400 font-mono">({Math.round(scale)} px/mm)</span>
       </div>
 
-      {/* Main Badge Outline / Canvas */}
-      <div
-        style={{
-          width: `${badgeWidthPx}px`,
-          height: `${badgeHeightPx}px`,
-          backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+      {/* Main Badge Outline / Canvas with synchronized BadgeRenderer */}
+      <BadgeRenderer
+        dimensions={dimensions}
+        elements={elements}
+        backgroundUrl={backgroundUrl}
+        competitor={currentCompetitor}
+        rolesMap={rolesMap}
+        scale={scale}
+        isInteractive={true}
+        selectedElementId={selectedElementId}
+        onSelectElement={onSelectElement}
+        scheduleData={scheduleData}
+        onStartDrag={(elemId, e) => {
+          const el = elements.find((x) => x.id === elemId);
+          if (!el) return;
+          setInteractionState({
+            mode: "drag",
+            elementId: elemId,
+            startX: e.clientX,
+            startY: e.clientY,
+            origX: el.position.x_mm,
+            origY: el.position.y_mm,
+            origW: el.position.width_mm,
+            origH: el.position.height_mm,
+          });
         }}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-lg shadow-2xl relative border-2 border-slate-300 overflow-hidden transition-all duration-200"
-      >
-        {/* Render Enabled Elements */}
-        {elements
-          .filter((elem) => elem.enabled)
-          .sort((a, b) => a.position.z_index - b.position.z_index)
-          .map((elem) => {
-            const isSelected = selectedElementId === elem.id;
-            const pos = elem.position;
-            const style = elem.style;
-
-            const elemXPx = pos.x_mm * scale;
-            const elemYPx = pos.y_mm * scale;
-            const elemWPx = pos.width_mm * scale;
-            const elemHPx = pos.height_mm * scale;
-
-            // Content generator
-            let contentText = "";
-            if (elem.type === "name") {
-              if (elem.name_display === "local_only" && currentCompetitor?.name_local) {
-                contentText = currentCompetitor.name_local;
-              } else if (elem.name_display === "both" && currentCompetitor?.name_local) {
-                contentText = `${currentCompetitor.name_latin} (${currentCompetitor.name_local})`;
-              } else {
-                contentText = currentCompetitor?.name_latin || "Participant Name";
-              }
-            } else if (elem.type === "wca_id") {
-              const raw = currentCompetitor?.wca_id || (currentCompetitor ? "Newcomer" : "2024EXAM01");
-              if (elem.format_mode === "prefix_label") {
-                contentText = `WCA ID: ${raw}`;
-              } else if (elem.format_mode === "custom") {
-                contentText = `${elem.format_prefix || ""}${raw}${elem.format_suffix || ""}`;
-              } else {
-                contentText = raw;
-              }
-            } else if (elem.type === "competition_id") {
-              const raw = String(currentCompetitor?.registrant_id ?? currentCompetitor?.csv_index ?? 1);
-              if (elem.format_mode === "prefix_label") {
-                contentText = `ID: ${raw}`;
-              } else if (elem.format_mode === "custom") {
-                contentText = `${elem.format_prefix || ""}${raw}${elem.format_suffix || ""}`;
-              } else {
-                contentText = raw;
-              }
-            } else if (elem.type === "role") {
-              contentText = roleName;
-            }
-
-            if (style?.uppercase) {
-              contentText = contentText.toUpperCase();
-            }
-
-            const textAlign =
-              elem.type === "role"
-                ? compRole?.style.text_align || "center"
-                : style?.text_align || "center";
-            const justifyClass =
-              textAlign === "left"
-                ? "justify-start text-left px-2"
-                : textAlign === "right"
-                ? "justify-end text-right px-2"
-                : "justify-center text-center px-1";
-
-            return (
-              <div
-                key={elem.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectElement(elem.id);
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  onSelectElement(elem.id);
-                  setInteractionState({
-                    mode: "drag",
-                    elementId: elem.id,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    origX: pos.x_mm,
-                    origY: pos.y_mm,
-                    origW: pos.width_mm,
-                    origH: pos.height_mm,
-                  });
-                }}
-                style={{
-                  position: "absolute",
-                  left: `${elemXPx}px`,
-                  top: `${elemYPx}px`,
-                  width: `${elemWPx}px`,
-                  height: `${elemHPx}px`,
-                  transform: `rotate(${pos.rotation_deg}deg)`,
-                  zIndex: pos.z_index,
-                  opacity:
-                    elem.type === "flag" || elem.type === "avatar" || elem.type === "qr_code" || elem.type === "schedule"
-                      ? elem.opacity ?? 1.0
-                      : style?.opacity ?? 1.0,
-                  backgroundColor:
-                    elem.type === "role"
-                      ? compRole?.style.background_color || "#2563EB"
-                      : style?.has_background
-                      ? style.background_color
-                      : "transparent",
-                  borderRadius:
-                    elem.type === "role"
-                      ? `${(compRole?.style.border_radius || 4) * scale * 0.25}px`
-                      : elem.type === "avatar"
-                      ? elem.border_radius_mm !== undefined
-                        ? `${elem.border_radius_mm * scale * 0.25}px`
-                        : "8px"
-                      : style?.has_background
-                      ? `${style.border_radius * scale * 0.25}px`
-                      : undefined,
-                  borderWidth:
-                    elem.type === "avatar" && elem.border_width_mm
-                      ? `${elem.border_width_mm * scale * 0.25}px`
-                      : style?.has_background && style.border_width > 0
-                      ? `${style.border_width}px`
-                      : undefined,
-                  borderColor:
-                    elem.type === "avatar" && elem.border_color
-                      ? elem.border_color
-                      : style?.has_background
-                      ? style.border_color
-                      : undefined,
-                  padding: style?.has_background ? `${style.padding_mm * scale * 0.25}px` : undefined,
-                }}
-                className={`group cursor-move transition-shadow ${
-                  isSelected ? "ring-2 ring-blue-500 ring-offset-1" : "hover:ring-1 hover:ring-blue-300"
-                }`}
-              >
-                {/* Element Content */}
-                {elem.type === "flag" ? (
-                  <div className="w-full h-full pointer-events-none">
-                    <CountryFlag iso2={currentCompetitor?.country_iso2 || "UA"} opacity={elem.opacity} />
-                  </div>
-                ) : elem.type === "avatar" ? (
-                  <div className="w-full h-full pointer-events-none overflow-hidden flex items-center justify-center bg-slate-100 rounded-[inherit]">
-                    {currentCompetitor?.avatar_url ? (
-                      <img
-                        src={currentCompetitor.avatar_url}
-                        alt={currentCompetitor.name_latin}
-                        className="w-full h-full object-cover rounded-[inherit]"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center text-slate-400 p-1 text-center w-full h-full">
-                        <User className="w-1/2 h-1/2 stroke-[1.5]" />
-                        <span className="text-[9px] font-semibold mt-0.5 truncate max-w-full px-1">
-                          {currentCompetitor?.name_latin?.split(" ")[0] || "Photo"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : elem.type === "qr_code" ? (
-                  <div className="w-full h-full pointer-events-none flex flex-col items-center justify-center p-1 bg-white rounded-lg shadow-sm border border-slate-200">
-                    {elem.qr_label && elem.qr_label_position !== "bottom" && (
-                      <div
-                        style={{ fontSize: `${Math.max(6, Math.min(11, elemWPx * 0.11))}px` }}
-                        className="font-black text-slate-900 tracking-wider text-center truncate mb-0.5 uppercase"
-                      >
-                        {elem.qr_label}
-                      </div>
-                    )}
-                    <div className="flex-1 flex items-center justify-center w-full min-h-0">
-                      <QRCodeSVG
-                        value={
-                          elem.qr_content ||
-                          (currentCompetitor?.wca_id
-                            ? `https://www.worldcubeassociation.org/persons/${currentCompetitor.wca_id}`
-                            : "https://live.worldcubeassociation.org")
-                        }
-                        size={Math.max(10, Math.min(elemWPx - 8, elemHPx - (elem.qr_label ? 16 : 8)))}
-                        level="M"
-                      />
-                    </div>
-                    {elem.qr_label && elem.qr_label_position === "bottom" && (
-                      <div
-                        style={{ fontSize: `${Math.max(6, Math.min(11, elemWPx * 0.11))}px` }}
-                        className="font-black text-slate-900 tracking-wider text-center truncate mt-0.5 uppercase"
-                      >
-                        {elem.qr_label}
-                      </div>
-                    )}
-                  </div>
-                ) : elem.type === "schedule" ? (
-                  <div className="w-full h-full pointer-events-none">
-                    <ScheduleTable
-                      widthPx={elemWPx}
-                      heightPx={elemHPx}
-                      scale={scale}
-                      competitor={currentCompetitor}
-                      title={elem.schedule_title}
-                      customData={elem.schedule_data}
-                    />
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      fontFamily:
-                        elem.type === "role"
-                          ? compRole?.style.font_family || "Inter"
-                          : style?.font_family || "Inter",
-                      fontSize: `${
-                        (elem.type === "role" ? compRole?.style.font_size || 12 : style?.font_size || 14) *
-                        (scale / 4.0)
-                      }px`,
-                      fontWeight:
-                        elem.type === "role"
-                          ? compRole?.style.font_weight || "600"
-                          : style?.font_weight || "600",
-                      fontStyle:
-                        (elem.type === "role" ? compRole?.style.italic : style?.italic) ? "italic" : "normal",
-                      color:
-                        elem.type === "role"
-                          ? compRole?.style.text_color || "#FFFFFF"
-                          : style?.text_color || "#111827",
-                      textAlign,
-                      justifyContent:
-                        textAlign === "left"
-                          ? "flex-start"
-                          : textAlign === "right"
-                          ? "flex-end"
-                          : "center",
-                      letterSpacing: style?.letter_spacing_mm ? `${style.letter_spacing_mm * scale}px` : undefined,
-                    }}
-                    className="w-full h-full flex items-center px-2 truncate pointer-events-none select-none"
-                  >
-                    {contentText}
-                  </div>
-                )}
-
-                {/* Figma-like Resize Handles when selected */}
-                {isSelected && (
-                  <>
-                    {(["tl", "tr", "bl", "br"] as const).map((handle) => (
-                      <div
-                        key={handle}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setInteractionState({
-                            mode: "resize",
-                            elementId: elem.id,
-                            handle,
-                            startX: e.clientX,
-                            startY: e.clientY,
-                            origX: pos.x_mm,
-                            origY: pos.y_mm,
-                            origW: pos.width_mm,
-                            origH: pos.height_mm,
-                          });
-                        }}
-                        className={`w-2.5 h-2.5 bg-white border-2 border-blue-600 rounded-sm absolute z-50 ${
-                          handle === "tl"
-                            ? "-top-1.5 -left-1.5 cursor-nwse-resize"
-                            : handle === "tr"
-                            ? "-top-1.5 -right-1.5 cursor-nesw-resize"
-                            : handle === "bl"
-                            ? "-bottom-1.5 -left-1.5 cursor-nesw-resize"
-                            : "-bottom-1.5 -right-1.5 cursor-nwse-resize"
-                        }`}
-                      />
-                    ))}
-                  </>
-                )}
-              </div>
-            );
-          })}
-      </div>
+        onStartResize={(elemId, handle, e) => {
+          const el = elements.find((x) => x.id === elemId);
+          if (!el) return;
+          setInteractionState({
+            mode: "resize",
+            elementId: elemId,
+            handle,
+            startX: e.clientX,
+            startY: e.clientY,
+            origX: el.position.x_mm,
+            origY: el.position.y_mm,
+            origW: el.position.width_mm,
+            origH: el.position.height_mm,
+          });
+        }}
+        className="rounded-lg shadow-2xl border-2 border-slate-300 transition-all duration-200"
+      />
     </main>
   );
 };

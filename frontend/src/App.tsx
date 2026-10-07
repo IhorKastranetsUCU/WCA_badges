@@ -13,6 +13,7 @@ import { AddCustomAttendeeModal } from "@/components/wca/AddCustomAttendeeModal"
 import { ExportPdfModal } from "@/components/editor/ExportPdfModal";
 import { parseClientCsv } from "@/utils/csvParser";
 import { exportBadges } from "@/utils/pdfExport";
+import { readFileAndCompress } from "@/utils/imageUtils";
 import { getApiUrl } from "@/api/config";
 
 const INITIAL_ROLES: Role[] = [
@@ -385,6 +386,7 @@ export const App: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [competitionSchedule, setCompetitionSchedule] = useState<any>(null);
 
   // Direct WCA OAuth login trigger
   const handleWcaOAuthLogin = async () => {
@@ -503,6 +505,124 @@ export const App: React.FC = () => {
   const selectedElement =
     currentSideConfig.elements.find((e) => e.id === selectedElementId) || null;
 
+  const [isFetchingAvatars, setIsFetchingAvatars] = useState<boolean>(false);
+
+  // Batch fetch WCA avatars for all competitors
+  const fetchWcaAvatars = async () => {
+    if (isFetchingAvatars) return;
+    const eligible = competitors.filter((c) => c.wca_id && c.wca_id.trim());
+    if (eligible.length === 0) return;
+
+    setIsFetchingAvatars(true);
+    try {
+      const res = await fetch(getApiUrl("/api/competitors/fetch-wca-avatars"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.updated) {
+          setCompetitors((prev) =>
+            prev.map((c) => {
+              if (c.id in data.updated) {
+                return { ...c, avatar_url: data.updated[c.id] };
+              }
+              return c;
+            })
+          );
+        }
+      } else {
+        await fetchWcaAvatarsClientSide();
+      }
+    } catch (err) {
+      console.warn("Backend avatar fetch error, falling back to client-side:", err);
+      await fetchWcaAvatarsClientSide();
+    } finally {
+      setIsFetchingAvatars(false);
+    }
+  };
+
+  const fetchWcaAvatarsClientSide = async () => {
+    const eligible = competitors.filter((c) => c.wca_id && c.wca_id.trim() && !c.avatar_url);
+    for (const comp of eligible) {
+      try {
+        const cleanWcaId = comp.wca_id!.trim().toUpperCase();
+        const res = await fetch(`https://www.worldcubeassociation.org/api/v0/persons/${cleanWcaId}`);
+        if (res.ok) {
+          const personData = await res.json();
+          const avatarObj = personData?.person?.avatar || {};
+          const isDefault = avatarObj.is_default;
+          const url = avatarObj.url || avatarObj.thumb_url;
+          const finalUrl = !isDefault && url && !url.includes("missing_avatar") ? url : null;
+          setCompetitors((prev) =>
+            prev.map((c) => (c.id === comp.id ? { ...c, avatar_url: finalUrl } : c))
+          );
+        }
+      } catch {
+        // Continue
+      }
+    }
+  };
+
+  const fetchSingleWcaAvatar = async (competitorId: string, wcaId: string) => {
+    setIsFetchingAvatars(true);
+    try {
+      const cleanWcaId = wcaId.trim().toUpperCase();
+      const res = await fetch(`https://www.worldcubeassociation.org/api/v0/persons/${cleanWcaId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const avatarObj = data?.person?.avatar || {};
+        const isDefault = avatarObj.is_default;
+        const url = avatarObj.url || avatarObj.thumb_url;
+        const finalUrl = !isDefault && url && !url.includes("missing_avatar") ? url : null;
+        setCompetitors((prev) =>
+          prev.map((c) => (c.id === competitorId ? { ...c, avatar_url: finalUrl } : c))
+        );
+        await fetch(getApiUrl(`/api/competitors/${competitorId}/avatar`), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ avatar_url: finalUrl }),
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to fetch avatar:", err);
+    } finally {
+      setIsFetchingAvatars(false);
+    }
+  };
+
+  const handleUploadCompetitorAvatar = async (competitorId: string, file: File) => {
+    try {
+      const dataUrl = await readFileAndCompress(file, 800, 800);
+      setCompetitors((prev) =>
+        prev.map((c) => (c.id === competitorId ? { ...c, avatar_url: dataUrl } : c))
+      );
+      await fetch(getApiUrl(`/api/competitors/${competitorId}/avatar`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url: dataUrl }),
+      });
+    } catch (err) {
+      console.error("Failed to upload avatar:", err);
+    }
+  };
+
+  const handleRemoveCompetitorAvatar = async (competitorId: string) => {
+    setCompetitors((prev) =>
+      prev.map((c) => (c.id === competitorId ? { ...c, avatar_url: null } : c))
+    );
+    try {
+      await fetch(getApiUrl(`/api/competitors/${competitorId}/avatar`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url: null }),
+      });
+    } catch (err) {
+      console.error("Failed to remove avatar:", err);
+    }
+  };
+
   const enabledFields: Record<string, boolean> = {
     name: currentSideConfig.elements.some((e) => e.type === "name" && e.enabled),
     wca_id: currentSideConfig.elements.some((e) => e.type === "wca_id" && e.enabled),
@@ -515,16 +635,19 @@ export const App: React.FC = () => {
   };
 
   const handleToggleField = (fieldType: string) => {
+    let willEnable = false;
     setTemplate((prev) => {
       const side = prev.sides[currentSide];
       const existing = side.elements.find((e) => e.type === fieldType);
 
       let updatedElements: BadgeElement[];
       if (existing) {
+        willEnable = !existing.enabled;
         updatedElements = side.elements.map((e) =>
           e.id === existing.id ? { ...e, enabled: !e.enabled } : e
         );
       } else {
+        willEnable = true;
         const proto = PROTOTYPE_ELEMENTS[fieldType];
         if (proto) {
           updatedElements = [
@@ -544,6 +667,11 @@ export const App: React.FC = () => {
         },
       };
     });
+
+    // If user clicked Competitor photo and enabled it, request avatars from WCA!
+    if (fieldType === "avatar" && willEnable) {
+      fetchWcaAvatars();
+    }
   };
 
   const handleUpdateElementPosition = (
@@ -761,9 +889,87 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleImportWcaCompetitors = (imported: Competitor[]) => {
+  const fetchCompetitionSchedule = async (compId: string) => {
+    try {
+      const headers: Record<string, string> = {};
+      if (wcaToken) headers["Authorization"] = `Bearer ${wcaToken}`;
+      const res = await fetch(getApiUrl(`/api/wca/competitions/${compId}/schedule`), { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setCompetitionSchedule(data);
+        // Also update template elements with the schedule data and competition title
+        setTemplate((prev) => {
+          const updateSides = { ...prev.sides };
+          for (const sideKey of ["front", "back"] as const) {
+            const side = updateSides[sideKey];
+            if (side && side.elements) {
+              updateSides[sideKey] = {
+                ...side,
+                elements: side.elements.map((elem) =>
+                  elem.type === "schedule"
+                    ? {
+                        ...elem,
+                        schedule_data: data,
+                        schedule_title: elem.schedule_title || data.competition_name || compId,
+                      }
+                    : elem
+                ),
+              };
+            }
+          }
+          return { ...prev, sides: updateSides };
+        });
+      }
+    } catch (e) {
+      console.warn("Could not fetch competition schedule:", e);
+    }
+  };
+
+  const handleAddAdditionalQrCode = () => {
+    const newId = `elem-qr_code-${Date.now()}`;
+    setTemplate((prev) => {
+      const side = prev.sides[currentSide];
+      const qrElements = side.elements.filter((e) => e.type === "qr_code");
+      const offsetMm = (qrElements.length % 4) * 12;
+      const newElem: BadgeElement = {
+        id: newId,
+        type: "qr_code",
+        enabled: true,
+        position: {
+          x_mm: Math.min(prev.dimensions.width_mm - 26, 12 + offsetMm),
+          y_mm: Math.min(prev.dimensions.height_mm - 26, 20 + offsetMm),
+          width_mm: 22,
+          height_mm: 22,
+          z_index: side.elements.length + 1,
+          rotation_deg: 0,
+        },
+        opacity: 1.0,
+        qr_content: "https://competitiongroups.com",
+        qr_label: `GROUPS ${qrElements.length + 1}`,
+        qr_label_position: "top",
+      };
+
+      return {
+        ...prev,
+        sides: {
+          ...prev.sides,
+          [currentSide]: {
+            ...side,
+            elements: [...side.elements, newElem],
+          },
+        },
+      };
+    });
+    setSelectedElementId(newId);
+  };
+
+  const handleImportWcaCompetitors = (imported: Competitor[], compId?: string) => {
     setCompetitors(imported);
     setCurrentParticipantIndex(0);
+    const resolvedCompId = compId || (imported[0] as any)?.competition_id;
+    if (resolvedCompId) {
+      fetchCompetitionSchedule(resolvedCompId);
+    }
   };
 
   const handleAddCustomCompetitor = (newComp: Competitor) => {
@@ -837,6 +1043,9 @@ export const App: React.FC = () => {
           onOpenAddCustomModal={() => setIsAddCustomModalOpen(true)}
           enabledFields={enabledFields}
           onToggleField={handleToggleField}
+          onUploadCompetitorAvatar={handleUploadCompetitorAvatar}
+          isFetchingAvatars={isFetchingAvatars}
+          onAddAdditionalQrCode={handleAddAdditionalQrCode}
         />
 
         {/* Central Container: Badge Preview Canvas */}
@@ -850,6 +1059,7 @@ export const App: React.FC = () => {
           onDeleteElement={handleDeleteElement}
           currentCompetitor={competitors[currentParticipantIndex]}
           roles={roles}
+          scheduleData={competitionSchedule}
         />
 
         {/* Right Container: Properties Inspector */}
@@ -868,7 +1078,22 @@ export const App: React.FC = () => {
           onAssignAll={handleAssignAllToRole}
           onSetDefaultRole={handleSetDefaultRole}
           currentCompetitorId={competitors[currentParticipantIndex]?.id}
+          currentCompetitor={competitors[currentParticipantIndex]}
+          onUploadPhoto={(file) => {
+            const comp = competitors[currentParticipantIndex];
+            if (comp) handleUploadCompetitorAvatar(comp.id, file);
+          }}
+          onRemovePhoto={() => {
+            const comp = competitors[currentParticipantIndex];
+            if (comp) handleRemoveCompetitorAvatar(comp.id);
+          }}
+          onFetchWcaAvatar={() => {
+            const comp = competitors[currentParticipantIndex];
+            if (comp?.wca_id) fetchSingleWcaAvatar(comp.id, comp.wca_id);
+          }}
+          isFetchingAvatar={isFetchingAvatars}
           onLayerChange={handleLayerChange}
+          onAddAdditionalQrCode={handleAddAdditionalQrCode}
         />
       </div>
 
@@ -916,6 +1141,10 @@ export const App: React.FC = () => {
         }}
         dimensions={template.dimensions}
         totalCompetitors={competitors.length}
+        template={template}
+        competitors={competitors}
+        roles={roles}
+        scheduleData={competitionSchedule}
       />
     </div>
   );

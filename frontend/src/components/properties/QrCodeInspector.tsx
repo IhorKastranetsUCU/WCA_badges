@@ -1,4 +1,5 @@
 import React from "react";
+import { Plus, QrCode } from "lucide-react";
 import { BadgeDimensions, ElementPosition } from "@/types/badge";
 import { PositionInspector } from "./PositionInspector";
 
@@ -13,6 +14,7 @@ interface QrCodeInspectorProps {
   onChangeOpacity: (opacity: number) => void;
   onChangeQr: (patch: { qr_content?: string; qr_label?: string; qr_label_position?: "top" | "bottom" | "none" }) => void;
   onLayerChange: (action: "bring_to_front" | "send_to_back" | "move_up" | "move_down") => void;
+  onAddAdditionalQrCode?: () => void;
 }
 
 const PRESET_URLS = [
@@ -32,12 +34,25 @@ export const QrCodeInspector: React.FC<QrCodeInspectorProps> = ({
   onChangeOpacity,
   onChangeQr,
   onLayerChange,
+  onAddAdditionalQrCode,
 }) => {
   return (
     <div className="space-y-4 select-none">
       <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-100 text-xs text-blue-900 leading-relaxed">
         <span className="font-bold">Scalable QR Code:</span> Create scannable links for Live Results, Groups, or Competitor details with customizable labels.
       </div>
+
+      {/* Button to add an additional QR code */}
+      {onAddAdditionalQrCode && (
+        <button
+          type="button"
+          onClick={onAddAdditionalQrCode}
+          className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          <span>+ Add Additional QR Code</span>
+        </button>
+      )}
 
       {/* QR Content / URL */}
       <div>

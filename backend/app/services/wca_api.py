@@ -14,138 +14,17 @@ from app.services.csv_parser import parse_wca_name, resolve_country_iso2
 
 logger = logging.getLogger(__name__)
 
-# Profiles for quick login / demo / test
-DEMO_PROFILES: Dict[str, WCAProfile] = {
-    "delegate": WCAProfile(
-        id=18942,
-        wca_id="2018SHEV01",
-        name="Ihor Shevchenko",
-        avatar_url="https://avatars.githubusercontent.com/u/45145803?v=4",
-        country_iso2="UA",
-        delegate_status="delegate",
-        is_delegate=True,
-        is_organizer=True,
-        email="ishevchenko@worldcubeassociation.org",
-    ),
-    "organizer": WCAProfile(
-        id=21450,
-        wca_id="2019MAZU01",
-        name="Oleksandr Mazur",
-        avatar_url="https://avatars.githubusercontent.com/u/9919?v=4",
-        country_iso2="UA",
-        delegate_status=None,
-        is_delegate=False,
-        is_organizer=True,
-        email="omazur@example.com",
-    ),
-}
+DEMO_PROFILES: Dict[str, WCAProfile] = {}
+
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+from fastapi import HTTPException
 
 # Competitions associated with organizers & delegates
-DATABASE_COMPETITIONS: List[Dict[str, Any]] = [
-    {
-        "id": "KyivSpring2026",
-        "name": "Kyiv Spring Cubing 2026",
-        "city": "Kyiv",
-        "country_iso2": "UA",
-        "start_date": "2026-04-18",
-        "end_date": "2026-04-19",
-        "delegates": ["Ihor Shevchenko"],
-        "organizers": ["Oleksandr Mazur", "Ihor Shevchenko"],
-    },
-    {
-        "id": "UkrainianNationals2026",
-        "name": "Ukrainian Championship 2026",
-        "city": "Lviv",
-        "country_iso2": "UA",
-        "start_date": "2026-08-22",
-        "end_date": "2026-08-24",
-        "delegates": ["Ihor Shevchenko", "Artem Melikyan"],
-        "organizers": ["Lviv Speedcubing Club"],
-    },
-    {
-        "id": "PodillyaOpen2026",
-        "name": "Podillya Open 2026",
-        "city": "Vinnytsia",
-        "country_iso2": "UA",
-        "start_date": "2026-06-13",
-        "end_date": "2026-06-14",
-        "delegates": ["Ihor Shevchenko"],
-        "organizers": ["Vinnytsia Cube Team"],
-    },
-    {
-        "id": "DniproCubeCup2026",
-        "name": "Dnipro Cube Cup 2026",
-        "city": "Dnipro",
-        "country_iso2": "UA",
-        "start_date": "2026-07-04",
-        "end_date": "2026-07-05",
-        "delegates": ["Artem Melikyan"],
-        "organizers": ["Oleksandr Mazur"],
-    },
-    {
-        "id": "WarsawOpen2026",
-        "name": "Warsaw Speedcube Open 2026",
-        "city": "Warsaw",
-        "country_iso2": "PL",
-        "start_date": "2026-05-09",
-        "end_date": "2026-05-10",
-        "delegates": ["Jan Kowalski"],
-        "organizers": ["Ihor Shevchenko"],
-    },
-]
+DATABASE_COMPETITIONS: List[Dict[str, Any]] = []
 
 # Registration records per competition
-SAMPLE_REGISTRATIONS: Dict[str, List[Dict[str, Any]]] = {
-    "KyivSpring2026": [
-        {"raw_name": "Yurii Riabov (Юрій Рябов)", "wca_id": "2018RIAB01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Oleksandr Mazur (Олександр Мазур)", "wca_id": "2019MAZU01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Vladyslav Klymenko (Владислав Клименко)", "wca_id": "2021KLYM01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Mykhailo Moroz (Михайло Мороз)", "wca_id": "2017MORO03", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Andriy Bondarenko (Андрій Бондаренко)", "wca_id": "2019BOND02", "country": "Ukraine", "status": "accepted"},
-        # Waiting list / pending competitors
-        {"raw_name": "Artem Zhuravsky (Артем Журавський)", "wca_id": "2022ZHUR01", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Bohdan Koval (Богдан Коваль)", "wca_id": "2023KOVA02", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Sophia Miller", "wca_id": "2020MILL05", "country": "Germany", "status": "pending"},
-        {"raw_name": "Denys Melnyk (Денис Мельник)", "wca_id": "2024MELN01", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Yaroslav Boyko (Ярослав Бойко)", "wca_id": "", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Anna Tkachenko (Анна Ткаченко)", "wca_id": "2023TKAC01", "country": "Ukraine", "status": "pending"},
-        # Cancelled
-        {"raw_name": "Dmytro Hordiyenko (Дмитро Гордієнко)", "wca_id": "2017HORD01", "country": "Ukraine", "status": "deleted"},
-        {"raw_name": "Kamil Wisniewski", "wca_id": "2015WISN02", "country": "Poland", "status": "rejected"},
-    ],
-    "UkrainianNationals2026": [
-        {"raw_name": "Yurii Riabov (Юрій Рябов)", "wca_id": "2018RIAB01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Vladyslav Hordiienko", "wca_id": "2018HORD01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Artem Melikyan (Артем Мелікян)", "wca_id": "2014MELI01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Lev Golub (Лев Голуб)", "wca_id": "2015GOLU01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Roman Ostapenko (Роман Остапенко)", "wca_id": "2018OSTA02", "country": "Ukraine", "status": "accepted"},
-        # Waiting list / pending competitors
-        {"raw_name": "Olena Bondar (Олена Бондар)", "wca_id": "2022BOND03", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Taras Shevchenko (Тарас Шевченко)", "wca_id": "", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Sevastian Ostrovskyi (Севастіян Островський)", "wca_id": "2026OSTR02", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Maksym Uhryna (Максим Угрина)", "wca_id": "2026UHRY01", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Roman Shmygelskyi (Роман Шмигельський)", "wca_id": "2023KROM01", "country": "Ukraine", "status": "pending"},
-        {"raw_name": "Danylo Radzishevsky (Данило Радзішевський)", "wca_id": "2023RADZ02", "country": "Ukraine", "status": "pending"},
-        # Cancelled
-        {"raw_name": "Denys Kravchenko (Денис Кравченко)", "wca_id": "2019KRAV01", "country": "Ukraine", "status": "deleted"},
-    ],
-    "PodillyaOpen2026": [
-        {"raw_name": "Yurii Riabov (Юрій Рябов)", "wca_id": "2018RIAB01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Ivan Petrenko (Іван Петренко)", "wca_id": "2021PETR02", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Nazar Boyko (Назар Бойко)", "wca_id": "2023BOYK01", "country": "Ukraine", "status": "pending"},
-    ],
-    "DniproCubeCup2026": [
-        {"raw_name": "Oleksandr Mazur (Олександр Мазур)", "wca_id": "2019MAZU01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Pavlo Sydorenko (Павло Сидоренко)", "wca_id": "2017SYDO01", "country": "Ukraine", "status": "accepted"},
-        {"raw_name": "Viktoria Tkachenko (Вікторія Ткаченко)", "wca_id": "", "country": "Ukraine", "status": "pending"},
-    ],
-    "WarsawOpen2026": [
-        {"raw_name": "Jan Kowalski", "wca_id": "2014KOWA01", "country": "Poland", "status": "accepted"},
-        {"raw_name": "Kamil Wisniewski", "wca_id": "2015WISN02", "country": "Poland", "status": "accepted"},
-        {"raw_name": "Piotr Nowak", "wca_id": "2018NOWA03", "country": "Poland", "status": "accepted"},
-        {"raw_name": "Magdalena Wisniewska", "wca_id": "", "country": "Poland", "status": "pending"},
-    ],
-}
+SAMPLE_REGISTRATIONS: Dict[str, List[Dict[str, Any]]] = {}
 
 
 def get_wca_authorization_url(redirect_uri: Optional[str] = None) -> Dict[str, str]:
@@ -179,17 +58,13 @@ async def exchange_wca_code(code: str, redirect_uri: Optional[str] = None) -> Di
         "code": code,
         "grant_type": "authorization_code",
     }
-    logger.info(f"Exchanging WCA code with redirect_uri={data['redirect_uri']}, client_id={data['client_id']}")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             res = await client.post(settings.WCA_OAUTH_TOKEN_URL, data=data)
-            logger.info(f"WCA token response status: {res.status_code}")
             if res.status_code == 200:
                 return res.json()
-            else:
-                logger.error(f"WCA token exchange error {res.status_code}: {res.text}")
     except Exception as e:
-        logger.error(f"Failed to exchange WCA OAuth code: {e}")
+        logger.warning(f"Failed to exchange WCA OAuth code: {e}")
 
     # Fallback to simulated token for local dev/testing
     return {
@@ -202,12 +77,20 @@ async def exchange_wca_code(code: str, redirect_uri: Optional[str] = None) -> Di
 async def fetch_wca_me_profile(token: str) -> WCAProfile:
     """
     Fetches the authenticated user's WCA profile from /api/v0/me.
+    Strictly queries live WCA API and does not fall back to fake users.
     """
+    clean_token = token.strip()
+    if clean_token.lower().startswith("bearer "):
+        clean_token = clean_token[7:].strip()
+
+    if not clean_token:
+        raise HTTPException(status_code=401, detail="Missing WCA token")
+
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             res = await client.get(
                 f"{settings.WCA_API_URL}/me",
-                headers={"Authorization": f"Bearer {token}"},
+                headers={"Authorization": f"Bearer {clean_token}"},
             )
             logger.info(f"WCA /me response status: {res.status_code}")
             if res.status_code == 200:
@@ -225,13 +108,21 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
                     is_organizer=True,
                     email=data.get("email"),
                 )
+            elif res.status_code == 401:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid WCA Personal Access Token. Please verify the token from your WCA Account Settings.",
+                )
             else:
-                logger.error(f"WCA /me error {res.status_code}: {res.text}")
+                raise HTTPException(
+                    status_code=res.status_code,
+                    detail=f"WCA API error ({res.status_code}): {res.text[:200]}",
+                )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch WCA profile from API: {e}")
-
-    # Fallback to default delegate profile
-    return DEMO_PROFILES["delegate"]
+        raise HTTPException(status_code=502, detail=f"Failed to reach WCA API: {e}")
 
 
 async def get_competitions_for_user(
@@ -239,15 +130,18 @@ async def get_competitions_for_user(
     token: Optional[str] = None,
 ) -> List[WCACompetition]:
     """
-    Returns only competitions where the user has a role (Delegate or Organizer).
+    Returns only competitions where the user has a role (Delegate or Organizer) from live WCA API.
     """
-    # 1. Attempt live WCA API fetch if real token is provided
-    if token and not token.startswith("wca_demo_"):
+    clean_token = token.strip() if token else None
+    if clean_token and clean_token.lower().startswith("bearer "):
+        clean_token = clean_token[7:].strip()
+
+    if clean_token:
         try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.get(
                     f"{settings.WCA_API_URL}/competitions?managed_by_me=true",
-                    headers={"Authorization": f"Bearer {token}"},
+                    headers={"Authorization": f"Bearer {clean_token}"},
                 )
                 if res.status_code == 200:
                     api_comps = res.json()
@@ -279,47 +173,265 @@ async def get_competitions_for_user(
                                 is_organizer=is_org or len(roles) == 0,
                             )
                         )
-                    if results:
-                        return results
+                    return results
         except Exception as e:
             logger.warning(f"Error fetching managed competitions from WCA API: {e}")
 
-    # 2. Filter database competitions based on user's identity and roles
-    filtered: List[WCACompetition] = []
-    user_name = profile.name
-    user_wca_id = profile.wca_id
+    return []
 
-    for comp in DATABASE_COMPETITIONS:
-        is_del = user_name in comp["delegates"] or (user_wca_id and user_wca_id in comp.get("delegate_wca_ids", []))
-        is_org = user_name in comp["organizers"] or (user_wca_id and user_wca_id in comp.get("organizer_wca_ids", []))
 
-        # Check if user matches delegate or organizer roles
-        if is_del or is_org or profile.is_delegate:
-            roles = []
-            if is_del:
-                roles.append("Delegate")
-            if is_org:
-                roles.append("Organizer")
-            if not roles:
-                roles = ["Delegate"] if profile.is_delegate else ["Organizer"]
-
-            filtered.append(
-                WCACompetition(
-                    id=comp["id"],
-                    name=comp["name"],
-                    city=comp["city"],
-                    country_iso2=comp["country_iso2"],
-                    start_date=comp["start_date"],
-                    end_date=comp["end_date"],
-                    delegates=comp["delegates"],
-                    organizers=comp["organizers"],
-                    user_roles=roles,
-                    is_delegate=is_del or profile.is_delegate,
-                    is_organizer=is_org or profile.is_organizer,
+async def get_wca_competition_info(competition_id: str) -> Optional[WCACompetition]:
+    """
+    Fetches public metadata for any WCA competition by ID.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}")
+            if res.status_code == 200:
+                c = res.json()
+                del_names = [d.get("name", "") for d in c.get("delegates", [])]
+                org_names = [o.get("name", "") for o in c.get("organizers", [])]
+                return WCACompetition(
+                    id=c.get("id"),
+                    name=c.get("name", c.get("id")),
+                    city=c.get("city", ""),
+                    country_iso2=c.get("country_iso2", "UA"),
+                    start_date=c.get("start_date", ""),
+                    end_date=c.get("end_date", ""),
+                    delegates=del_names,
+                    organizers=org_names,
+                    user_roles=["Public"],
+                    is_delegate=False,
+                    is_organizer=False,
                 )
-            )
+    except Exception as e:
+        logger.warning(f"Failed to fetch competition info for {competition_id}: {e}")
+    return None
 
-    return filtered
+
+_WCIF_CACHE: Dict[str, Any] = {}
+
+
+async def get_wcif_data(competition_id: str, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Fetches and caches the official WCIF data (including schedule and Groupifier assignments).
+    """
+    if competition_id in _WCIF_CACHE:
+        return _WCIF_CACHE[competition_id]
+
+    clean_token = None
+    if token:
+        clean_token = token.strip()
+        if clean_token.lower().startswith("bearer "):
+            clean_token = clean_token[7:].strip()
+
+    headers = {"Authorization": f"Bearer {clean_token}"} if clean_token else {}
+    wcif = None
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        if headers:
+            try:
+                res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif", headers=headers)
+                if res.status_code == 200:
+                    wcif = res.json()
+            except Exception as e:
+                logger.warning(f"Error fetching authorized WCIF for {competition_id}: {e}")
+
+        if not wcif:
+            try:
+                res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif/public")
+                if res.status_code == 200:
+                    wcif = res.json()
+            except Exception as e:
+                logger.warning(f"Error fetching public WCIF for {competition_id}: {e}")
+
+    if wcif:
+        _WCIF_CACHE[competition_id] = wcif
+    return wcif
+
+
+async def fetch_wca_competition_schedule(
+    competition_id: str,
+    token: Optional[str] = None,
+    registrant_id: Optional[int] = None,
+    wca_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Fetches the WCIF schedule for a competition directly from WCA API,
+    converts UTC times to venue local timezone, attaches room colors,
+    and maps personal Groupifier assignments (competing, judging, scrambling, running).
+    """
+    wcif_data = await get_wcif_data(competition_id, token)
+
+    if not wcif_data:
+        return {
+            "competition_id": competition_id,
+            "competition_name": competition_id,
+            "timezone": "UTC",
+            "rooms": [],
+            "days": [],
+        }
+
+    schedule = wcif_data.get("schedule", {})
+    venues = schedule.get("venues", [])
+    if not venues:
+        return {
+            "competition_id": competition_id,
+            "competition_name": wcif_data.get("name", competition_id),
+            "timezone": "UTC",
+            "rooms": [],
+            "days": [],
+        }
+
+    venue = venues[0]
+    tz_str = venue.get("timezone", "UTC")
+    try:
+        tz = ZoneInfo(tz_str)
+    except Exception:
+        tz = timezone.utc
+
+    # If registrant_id or wca_id is provided, map personal assignments
+    person_tasks: Dict[int, str] = {}  # activity_id -> task code ("C", "J", "S", "R")
+    person_groups: Dict[str, str] = {}  # event_code -> group_str (e.g. "Gr 2 (St 10)")
+    
+    target_person = None
+    if registrant_id or wca_id:
+        for p in wcif_data.get("persons", []):
+            if (registrant_id and p.get("registrantId") == registrant_id) or (wca_id and p.get("wcaId") == wca_id):
+                target_person = p
+                break
+
+    # Build activity parent map
+    act_parent_map: Dict[int, int] = {}  # child_id -> parent_round_id
+    child_info_map: Dict[int, Dict[str, Any]] = {}
+
+    for r in venue.get("rooms", []):
+        for act in r.get("activities", []):
+            for ca in act.get("childActivities", []):
+                ca_id = ca.get("id")
+                act_parent_map[ca_id] = act.get("id")
+                child_info_map[ca_id] = {
+                    "code": ca.get("activityCode", ""),
+                    "name": ca.get("name", ""),
+                }
+
+    if target_person:
+        for ass in target_person.get("assignments", []):
+            ass_id = ass.get("activityId")
+            code = ass.get("assignmentCode", "")
+            station = ass.get("stationNumber")
+            
+            task_letter = ""
+            if code == "competitor":
+                task_letter = "C"
+            elif code == "staff-judge":
+                task_letter = "J"
+            elif code == "staff-scrambler":
+                task_letter = "S"
+            elif code == "staff-runner":
+                task_letter = "R"
+            elif code:
+                task_letter = code[:2].upper()
+
+            if task_letter:
+                # Mark direct activity
+                person_tasks[ass_id] = task_letter
+                # Mark parent round activity
+                if ass_id in act_parent_map:
+                    person_tasks[act_parent_map[ass_id]] = task_letter
+
+    all_rooms = []
+    day_activities: Dict[str, List[Dict[str, Any]]] = {}
+
+    for r in venue.get("rooms", []):
+        r_id = r.get("id", 1)
+        r_name = r.get("name", "Main Room")
+        r_color = r.get("color") or "#2563EB"
+        all_rooms.append({
+            "id": r_id,
+            "name": r_name,
+            "color": r_color,
+        })
+
+        for act in r.get("activities", []):
+            start_iso = act.get("startTime")
+            end_iso = act.get("endTime")
+            if not start_iso:
+                continue
+
+            try:
+                dt_start = datetime.fromisoformat(start_iso.replace("Z", "+00:00")).astimezone(tz)
+                time_str = dt_start.strftime("%H:%M")
+                date_key = dt_start.strftime("%Y-%m-%d")
+                day_name = dt_start.strftime("%A")
+            except Exception:
+                time_str = start_iso[11:16] if len(start_iso) >= 16 else "09:00"
+                date_key = start_iso[:10] if len(start_iso) >= 10 else "2026-01-01"
+                day_name = "Day"
+                dt_start = datetime.now()
+
+            act_id = act.get("id")
+            act_name = act.get("name", "Event")
+            act_code = act.get("activityCode", "")
+            is_break = any(b in act_name.lower() for b in ["lunch", "opening", "closing", "break", "awards", "dinner", "check-in", "registration"])
+
+            # Determine task for this activity from Groupifier assignments
+            task_label = person_tasks.get(act_id, "")
+            if not task_label and not is_break:
+                # Fallback task indicator
+                if "final" in act_name.lower():
+                    task_label = "F"
+                elif "round 2" in act_name.lower():
+                    task_label = "R2"
+
+            entry = {
+                "time": time_str,
+                "event": act_name,
+                "code": act_code,
+                "task": task_label,
+                "is_break": is_break,
+                "room_id": r_id,
+                "room_name": r_name,
+                "room_color": r_color,
+                "dt": dt_start,
+            }
+
+            if date_key not in day_activities:
+                day_activities[date_key] = []
+            day_activities[date_key].append(entry)
+
+    days_list = []
+    for d_date in sorted(day_activities.keys()):
+        acts = day_activities[d_date]
+        acts.sort(key=lambda x: x["dt"])
+        day_name = acts[0]["dt"].strftime("%A") if acts else "Day"
+
+        clean_entries = []
+        for a in acts:
+            clean_entries.append({
+                "time": a["time"],
+                "event": a["event"],
+                "code": a["code"],
+                "task": a.get("task", ""),
+                "isBreak": a["is_break"],
+                "roomId": a["room_id"],
+                "roomName": a["room_name"],
+                "roomColor": a["room_color"],
+            })
+
+        days_list.append({
+            "date": d_date,
+            "dayName": day_name,
+            "entries": clean_entries,
+        })
+
+    return {
+        "competition_id": competition_id,
+        "competition_name": wcif_data.get("name", competition_id),
+        "timezone": tz_str,
+        "rooms": all_rooms,
+        "days": days_list,
+    }
 
 
 async def get_competition_registrations_categorized(
@@ -337,32 +449,67 @@ async def get_competition_registrations_categorized(
 
     found_on_wca = False
 
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            headers = {"Authorization": f"Bearer {token}"} if (token and not token.startswith("wca_demo_")) else {}
+    if competition_id in _WCIF_CACHE:
+        found_on_wca = True
+        wcif_data = _WCIF_CACHE[competition_id]
+        comp_name = wcif_data.get("name", competition_id)
+        for p in wcif_data.get("persons", []):
+            reg = p.get("registration")
+            st = "accepted"
+            if reg and isinstance(reg, dict):
+                if reg.get("isCompeting") is False:
+                    continue
+                st = str(reg.get("status", "accepted")).lower()
+                if reg.get("deleted_at") is not None or st in ["deleted", "rejected", "cancelled", "canceled", "declined", "withdrawn", "d"]:
+                    st = "cancelled"
+                elif st in ["pending", "waitlist", "waiting_list"] or reg.get("is_waiting_list") or reg.get("waiting_list_position") is not None:
+                    st = "pending"
+                else:
+                    st = "accepted"
 
-            # Fetch competition metadata (name)
-            try:
-                comp_res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}", headers=headers)
-                if comp_res.status_code == 200:
-                    found_on_wca = True
-                    comp_info = comp_res.json()
-                    comp_name = comp_info.get("name", competition_id)
-            except Exception:
-                pass
+            name = p.get("name") or "Competitor"
+            wca_id = p.get("wcaId")
+            country = p.get("countryIso2") or "UA"
+            reg_id = p.get("registrantId")
+            avatar_obj = p.get("avatar") or {}
+            avatar_url = avatar_obj.get("url") or avatar_obj.get("thumbUrl")
 
-            # Query WCIF endpoint (WCIF contains the complete, authoritative persons list with full names, WCA IDs, countries & registrations)
-            wcif_urls = []
-            if headers:
-                wcif_urls.append((f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif", headers))
-            wcif_urls.append((f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif/public", {}))
+            raw_records.append({
+                "raw_name": name,
+                "wca_id": wca_id,
+                "country": country,
+                "status": st,
+                "registrant_id": reg_id,
+                "avatar_url": avatar_url,
+            })
 
-            for url, hdrs in wcif_urls:
-                wcif_res = await client.get(url, headers=hdrs)
-                if wcif_res.status_code == 200:
-                    found_on_wca = True
-                    wcif_data = wcif_res.json()
-                    comp_name = wcif_data.get("name", comp_name)
+    if not found_on_wca:
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                headers = {"Authorization": f"Bearer {token}"} if (token and not token.startswith("wca_demo_")) else {}
+
+                # Fetch competition metadata (name)
+                try:
+                    comp_res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}", headers=headers)
+                    if comp_res.status_code == 200:
+                        found_on_wca = True
+                        comp_info = comp_res.json()
+                        comp_name = comp_info.get("name", competition_id)
+                except Exception:
+                    pass
+
+                # Query WCIF endpoint (WCIF contains the complete, authoritative persons list with full names, WCA IDs, countries & registrations)
+                wcif_urls = []
+                if headers:
+                    wcif_urls.append((f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif", headers))
+                wcif_urls.append((f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif/public", {}))
+
+                for url, hdrs in wcif_urls:
+                    wcif_res = await client.get(url, headers=hdrs)
+                    if wcif_res.status_code == 200:
+                        found_on_wca = True
+                        wcif_data = wcif_res.json()
+                        comp_name = wcif_data.get("name", comp_name)
                     for p in wcif_data.get("persons", []):
                         reg = p.get("registration")
                         # Crucial: Only show people who actually registered to compete!
@@ -399,12 +546,12 @@ async def get_competition_registrations_categorized(
                         })
                     # Found and parsed WCIF persons
                     break
-    except Exception as e:
-        logger.warning(f"WCA API registrations fetch failed: {e}")
+        except Exception as e:
+            logger.warning(f"WCA API registrations fetch failed: {e}")
 
     # Fallback to sample registrations ONLY if the competition was NOT found on WCA (e.g. offline/demo)
     if not found_on_wca:
-        source_data = SAMPLE_REGISTRATIONS.get(competition_id, SAMPLE_REGISTRATIONS["KyivSpring2026"])
+        source_data = SAMPLE_REGISTRATIONS.get(competition_id, [])
         comp_obj = next((c for c in DATABASE_COMPETITIONS if c["id"] == competition_id), None)
         if comp_obj:
             comp_name = comp_obj["name"]

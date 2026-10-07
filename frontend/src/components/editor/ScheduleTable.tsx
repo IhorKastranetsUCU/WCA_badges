@@ -15,6 +15,9 @@ interface ScheduleEntry {
   event: string;
   task?: string;
   isBreak?: boolean;
+  roomId?: number;
+  roomName?: string;
+  roomColor?: string;
 }
 
 interface ScheduleDay {
@@ -141,7 +144,9 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
   title,
   customData,
 }) => {
-  const days: ScheduleDay[] = customData?.days || DEFAULT_DAYS;
+  const isRealSchedule = Boolean(customData?.days && customData.days.length > 0);
+  const days: ScheduleDay[] = (isRealSchedule ? customData.days : DEFAULT_DAYS).slice(0, 4);
+  const colCount = Math.max(1, days.length);
 
   // Scalable font calculation based on container dimensions
   const baseScale = Math.min(widthPx / 420, heightPx / 200);
@@ -167,23 +172,43 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
     }
   };
 
+  const displayTitle = title || (isRealSchedule ? customData?.competition_name : null);
+
   return (
     <div
       style={{ width: `${widthPx}px`, height: `${heightPx}px` }}
       className="flex flex-col bg-white overflow-hidden select-none border border-slate-300 rounded"
     >
-      {/* Optional Title */}
-      {title && (
+      {/* Title Header */}
+      {displayTitle ? (
         <div
-          style={{ fontSize: `${headerFontSize * 1.1}px` }}
-          className="bg-slate-800 text-white font-bold text-center py-0.5 tracking-wide uppercase truncate shrink-0"
+          style={{ fontSize: `${headerFontSize * 1.05}px` }}
+          className="bg-slate-800 text-white font-bold text-center py-0.5 tracking-wide uppercase truncate shrink-0 flex items-center justify-center gap-1.5"
         >
-          {title}
+          <span>{displayTitle}</span>
+          {!isRealSchedule && (
+            <span className="text-[8px] bg-amber-500 text-slate-900 px-1 py-0.2 rounded font-extrabold normal-case tracking-normal">
+              Demo Preview
+            </span>
+          )}
         </div>
-      )}
+      ) : !isRealSchedule ? (
+        <div
+          style={{ fontSize: `${headerFontSize * 0.9}px` }}
+          className="bg-slate-800 text-amber-300 font-semibold text-center py-0.5 tracking-tight truncate shrink-0"
+        >
+          Sample Schedule Preview (Import WCA Competition to load real schedule)
+        </div>
+      ) : null}
 
       {/* Columns for Days */}
-      <div className="flex-1 grid grid-cols-4 divide-x divide-slate-300 overflow-hidden">
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))`,
+        }}
+        className="flex-1 divide-x divide-slate-300 overflow-hidden"
+      >
         {days.map((day, dayIdx) => (
           <div key={dayIdx} className="flex flex-col h-full overflow-hidden min-w-0">
             {/* Day Header */}
@@ -215,6 +240,12 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       fontSize: `${rowFontSize}px`,
                       paddingTop: `${paddingY}px`,
                       paddingBottom: `${paddingY}px`,
+                      backgroundColor: entry.roomColor
+                        ? `${entry.roomColor}28`
+                        : undefined,
+                      borderLeft: entry.roomColor
+                        ? `2.5px solid ${entry.roomColor}`
+                        : undefined,
                     }}
                     className={`flex items-center px-0.5 leading-none transition-colors ${
                       isBreak

@@ -66,37 +66,19 @@ async def export_badges_pdf(
         competitors = comp_res.scalars().all()
 
         if not competitors:
-            comp_dicts = [
-                {
-                    "csv_index": 1,
-                    "name_latin": "Ihor Shevchenko",
-                    "name_local": "Ігор Шевченко",
-                    "wca_id": "2018SHEV01",
-                    "country_iso2": "UA",
-                    "country_name": "Ukraine",
-                    "role_id": "r-participant",
-                },
-                {
-                    "csv_index": 2,
-                    "name_latin": "Artem Zhuravsky",
-                    "name_local": "Артем Журавський",
-                    "wca_id": "2022ZHUR01",
-                    "country_iso2": "UA",
-                    "country_name": "Ukraine",
-                    "role_id": "r-participant",
-                },
-            ]
-        else:
-            for c in competitors:
-                comp_dicts.append({
-                    "csv_index": c.csv_index,
-                    "name_latin": c.name_latin,
-                    "name_local": c.name_local,
-                    "wca_id": c.wca_id,
-                    "country_iso2": c.country_iso2,
-                    "country_name": c.country_name,
-                    "role_id": c.role_id,
-                })
+            raise HTTPException(status_code=400, detail="No competitors provided or found to generate badges")
+        for c in competitors:
+            comp_dicts.append({
+                "csv_index": c.csv_index,
+                "name_latin": c.name_latin,
+                "name_local": c.name_local,
+                "name_raw": c.name_raw,
+                "wca_id": c.wca_id,
+                "country_iso2": c.country_iso2,
+                "country_name": c.country_name,
+                "role_id": c.role_id,
+                "avatar_url": c.avatar_url,
+            })
 
     roles_map = {}
     if payload.roles and len(payload.roles) > 0:
@@ -116,6 +98,7 @@ async def export_badges_pdf(
         paper_size=payload.paper_size,
         parity=payload.parity,
         crop_marks=payload.crop_marks,
+        schedule_data=payload.schedule_data,
     )
 
     return Response(

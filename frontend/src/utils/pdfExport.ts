@@ -8,30 +8,35 @@ export interface ExportPdfOptions {
   side?: "front" | "back" | "both";
   parity?: "front_even" | "front_odd";
   crop_marks?: boolean;
+  schedule_data?: any;
 }
 
-const PAPER_SIZES: Record<string, [number, number]> = {
+export const PAPER_SIZES: Record<string, [number, number]> = {
   A4: [210.0, 297.0],
   A5: [148.0, 210.0],
   Letter: [215.9, 279.4],
   Legal: [215.9, 355.6],
 };
 
-export async function exportBadges(
+export async function generateBadgesPdfBlob(
   template: BadgeTemplate,
   competitors: Competitor[],
   roles: Role[],
   options: ExportPdfOptions = {}
-): Promise<void> {
+): Promise<Blob> {
   const {
     paper_size = "A4",
     side = "both",
     parity = "front_even",
     crop_marks = true,
+    schedule_data,
   } = options;
 
   // Try server-side ReportLab high-fidelity PDF export first
   try {
+    const scheduleElem = template.sides?.back?.elements?.find((e: any) => e.type === "schedule") as any;
+    const resolvedScheduleData = schedule_data || scheduleElem?.schedule_data;
+
     const res = await fetch(getApiUrl("/api/badges/export-pdf"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -46,19 +51,12 @@ export async function exportBadges(
         },
         competitors,
         roles,
+        schedule_data: resolvedScheduleData,
       }),
     });
 
     if (res.ok) {
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `wca_badges_${paper_size}_${side}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      return;
+      return await res.blob();
     }
   } catch (err) {
     console.warn("Backend PDF export unavailable, falling back to client-side jsPDF:", err);
@@ -80,17 +78,24 @@ export async function exportBadges(
 
   const rolesMap = new Map(roles.map((r) => [r.id, r]));
 
-  // Grid calculation to minimize waste
-  const edge_margin = is_single ? 0 : 5.0;
-  const avail_w = is_single ? badge_w : Math.max(10, sheet_w - 2 * edge_margin);
-  const avail_h = is_single ? badge_h : Math.max(10, sheet_h - 2 * edge_margin);
+  // Grid calculation to minimize waste (evaluating both 0° and 90° packing)
+  const cols_0 = is_single ? 1 : Math.max(1, Math.floor((sheet_w + 1.0) / badge_w));
+  const rows_0 = is_single ? 1 : Math.max(1, Math.floor((sheet_h + 1.0) / badge_h));
+  const count_0 = cols_0 * rows_0;
 
-  const cols = is_single ? 1 : Math.max(1, Math.floor(avail_w / badge_w));
-  const rows = is_single ? 1 : Math.max(1, Math.floor(avail_h / badge_h));
+  const cols_90 = is_single ? 1 : Math.max(1, Math.floor((sheet_w + 1.0) / badge_h));
+  const rows_90 = is_single ? 1 : Math.max(1, Math.floor((sheet_h + 1.0) / badge_w));
+  const count_90 = cols_90 * rows_90;
+
+  const should_rotate = !is_single && count_90 > count_0;
+  const cols = should_rotate ? cols_90 : cols_0;
+  const rows = should_rotate ? rows_90 : rows_0;
+  const cell_w = should_rotate ? badge_h : badge_w;
+  const cell_h = should_rotate ? badge_w : badge_h;
   const badges_per_sheet = cols * rows;
 
-  const total_grid_w = cols * badge_w;
-  const total_grid_h = rows * badge_h;
+  const total_grid_w = cols * cell_w;
+  const total_grid_h = rows * cell_h;
   const margin_x = is_single ? 0 : (sheet_w - total_grid_w) / 2.0;
   const margin_y = is_single ? 0 : (sheet_h - total_grid_h) / 2.0;
 
@@ -123,12 +128,12 @@ export async function exportBadges(
       if (elem.type === "role") {
         const rStyle = compRole?.style;
         doc.setFillColor(rStyle?.background_color || "#2563EB");
-        const radius = rStyle?.border_radius ? Math.min(rStyle.border_radius * 0.5, Math.min(w, h) / 2) : 2;
+        const radius = rStyle?.border_radius ? Math.min(rStyle.border_radius, Math.min(w, h) / 2) : 2;
         doc.roundedRect(pt_x, pt_y, w, h, radius, radius, "F");
       } else if (style?.has_background) {
         doc.setFillColor(style.background_color || "#FFFFFF");
         if (style.border_radius && style.border_radius > 0) {
-          const radius = Math.min(style.border_radius * 0.5, Math.min(w, h) / 2);
+          const radius = Math.min(style.border_radius, Math.min(w, h) / 2);
           doc.roundedRect(pt_x, pt_y, w, h, radius, radius, "F");
         } else {
           doc.rect(pt_x, pt_y, w, h, "F");
@@ -145,7 +150,10 @@ export async function exportBadges(
           text = comp.name_latin;
         }
       } else if (elem.type === "wca_id") {
-        const raw = comp.wca_id || "Newcomer";
+        const raw = comp.wca_id;
+        if (!raw || !raw.trim()) {
+          return; // User requirement: Do not write "Newcomer", leave empty
+        }
         if (elem.format_mode === "prefix_label") {
           text = `WCA ID: ${raw}`;
         } else if (elem.format_mode === "custom") {
@@ -164,6 +172,15 @@ export async function exportBadges(
         }
       } else if (elem.type === "role") {
         text = roleName;
+      } else if (elem.type === "avatar") {
+        if (comp.avatar_url) {
+          try {
+            doc.addImage(comp.avatar_url, "JPEG", pt_x, pt_y, w, h);
+          } catch {
+            // Ignore format error in fallback
+          }
+        }
+        return; // If no avatar, leave empty without photo
       } else if (elem.type === "flag") {
         const iso = (comp.country_iso2 || "UA").toUpperCase();
         if (iso === "UA") {
@@ -265,11 +282,9 @@ export async function exportBadges(
 
     if (side === "both") {
       if (parity === "front_even") {
-        // Back on odd (Page 1), Front on even (Page 2)
         renderSheet("back");
         renderSheet("front");
       } else {
-        // Front on odd (Page 1), Back on even (Page 2)
         renderSheet("front");
         renderSheet("back");
       }
@@ -278,5 +293,22 @@ export async function exportBadges(
     }
   }
 
-  doc.save(`wca_badges_${paper_size}_${side}.pdf`);
+  return doc.output("blob");
 }
+
+export async function exportBadges(
+  template: BadgeTemplate,
+  competitors: Competitor[],
+  roles: Role[],
+  options: ExportPdfOptions = {}
+): Promise<void> {
+  const blob = await generateBadgesPdfBlob(template, competitors, roles, options);
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `wca_badges_${options.paper_size || "A4"}_${options.side || "both"}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
