@@ -41,10 +41,18 @@ async def get_oauth_url(redirect_uri: Optional[str] = None):
     return WCAOAuthUrlResponse(**data)
 
 
+import uuid
+from app.models.user import User
+
+
 @router.post("/oauth/callback", response_model=WCAAuthResponse)
-async def handle_oauth_callback(payload: WCAOAuthCallbackRequest):
+async def handle_oauth_callback(
+    payload: WCAOAuthCallbackRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Exchanges OAuth code for access token and retrieves profile and managed competitions.
+    Exchanges OAuth code for access token, retrieves profile and managed competitions,
+    and preserves user and WCA data in the database.
     """
     token_data = await exchange_wca_code(payload.code, payload.redirect_uri)
     access_token = token_data.get("access_token", f"wca_tok_{payload.code[:8]}")
@@ -52,15 +60,56 @@ async def handle_oauth_callback(payload: WCAOAuthCallbackRequest):
     profile = await fetch_wca_me_profile(access_token)
     comps = await get_competitions_for_user(profile, access_token)
 
+    # Preserve user & WCA profile in DB
+    try:
+        if profile.email or profile.wca_id:
+            lookup_email = (profile.email or f"{profile.wca_id.lower()}@wca.local").strip().lower()
+            stmt = select(User).where((User.email == lookup_email) | (User.wca_id == profile.wca_id))
+            res = await db.execute(stmt)
+            db_user = res.scalars().first()
+            if not db_user:
+                db_user = User(
+                    id=str(uuid.uuid4()),
+                    email=lookup_email,
+                    name=profile.name,
+                    avatar_url=profile.avatar_url,
+                    auth_provider="wca",
+                    wca_id=profile.wca_id,
+                    wca_name=profile.name,
+                    wca_avatar_url=profile.avatar_url,
+                    wca_country_iso2=profile.country_iso2,
+                    wca_delegate_status=profile.delegate_status,
+                    wca_profile_data=profile.model_dump(),
+                    wca_access_token=access_token,
+                )
+                db.add(db_user)
+            else:
+                db_user.wca_id = profile.wca_id
+                db_user.wca_name = profile.name
+                db_user.wca_avatar_url = profile.avatar_url
+                db_user.wca_country_iso2 = profile.country_iso2
+                db_user.wca_delegate_status = profile.delegate_status
+                db_user.wca_profile_data = profile.model_dump()
+                db_user.wca_access_token = access_token
+            await db.commit()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Could not persist WCA user in DB: %s", e)
+
     return WCAAuthResponse(
         access_token=access_token,
         profile=profile,
         competitions=comps,
+        provider="wca",
+        needs_wca_link=False,
     )
 
 
 @router.post("/login", response_model=WCAAuthResponse)
-async def login_with_token_or_demo(payload: WCATokenLoginRequest):
+async def login_with_token_or_demo(
+    payload: WCATokenLoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """
     Connects with a WCA Personal Access Token and retrieves real profile and managed competitions.
     """
@@ -71,10 +120,48 @@ async def login_with_token_or_demo(payload: WCATokenLoginRequest):
     profile = await fetch_wca_me_profile(token)
     comps = await get_competitions_for_user(profile, token)
 
+    # Preserve user & WCA profile in DB
+    try:
+        if profile.email or profile.wca_id:
+            lookup_email = (profile.email or f"{profile.wca_id.lower()}@wca.local").strip().lower()
+            stmt = select(User).where((User.email == lookup_email) | (User.wca_id == profile.wca_id))
+            res = await db.execute(stmt)
+            db_user = res.scalars().first()
+            if not db_user:
+                db_user = User(
+                    id=str(uuid.uuid4()),
+                    email=lookup_email,
+                    name=profile.name,
+                    avatar_url=profile.avatar_url,
+                    auth_provider="wca",
+                    wca_id=profile.wca_id,
+                    wca_name=profile.name,
+                    wca_avatar_url=profile.avatar_url,
+                    wca_country_iso2=profile.country_iso2,
+                    wca_delegate_status=profile.delegate_status,
+                    wca_profile_data=profile.model_dump(),
+                    wca_access_token=token,
+                )
+                db.add(db_user)
+            else:
+                db_user.wca_id = profile.wca_id
+                db_user.wca_name = profile.name
+                db_user.wca_avatar_url = profile.avatar_url
+                db_user.wca_country_iso2 = profile.country_iso2
+                db_user.wca_delegate_status = profile.delegate_status
+                db_user.wca_profile_data = profile.model_dump()
+                db_user.wca_access_token = token
+            await db.commit()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Could not persist WCA token user in DB: %s", e)
+
     return WCAAuthResponse(
         access_token=token,
         profile=profile,
         competitions=comps,
+        provider="wca",
+        needs_wca_link=False,
     )
 
 
@@ -99,8 +186,13 @@ async def list_user_competitions(
     if not authorization:
         return []
     token = authorization.replace("Bearer ", "").strip()
-    profile = await fetch_wca_me_profile(token)
-    return await get_competitions_for_user(profile, token)
+    try:
+        profile = await fetch_wca_me_profile(token)
+        comps = await get_competitions_for_user(profile, token)
+        return comps
+    except Exception as e:
+        logger.info(f"Fallback in list_user_competitions for token: {e}")
+        return []
 
 
 @router.get("/competitions/{competition_id}/schedule")

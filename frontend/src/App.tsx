@@ -91,52 +91,7 @@ const INITIAL_ROLES: Role[] = [
   },
 ];
 
-const INITIAL_COMPETITORS: Competitor[] = [
-  {
-    id: "c1",
-    csv_index: 1,
-    name_latin: "Artem Zhuravsky",
-    name_local: "Артем Журавський",
-    name_raw: "Artem Zhuravsky (Артем Журавський)",
-    wca_id: "2022ZHUR01",
-    country_iso2: "UA",
-    country_name: "Ukraine",
-    role_id: "r-participant",
-  },
-  {
-    id: "c2",
-    csv_index: 2,
-    name_latin: "Bohdan Koval",
-    name_local: "Богдан Коваль",
-    name_raw: "Bohdan Koval (Богдан Коваль)",
-    wca_id: "2023KOVA02",
-    country_iso2: "UA",
-    country_name: "Ukraine",
-    role_id: "r-participant",
-  },
-  {
-    id: "c3",
-    csv_index: 3,
-    name_latin: "Sophia Miller",
-    name_local: null,
-    name_raw: "Sophia Miller",
-    wca_id: "2020MILL05",
-    country_iso2: "DE",
-    country_name: "Germany",
-    role_id: "r-participant",
-  },
-  {
-    id: "c4",
-    csv_index: 4,
-    name_latin: "Denys Melnyk",
-    name_local: "Денис Мельник",
-    name_raw: "Denys Melnyk (Денис Мельник)",
-    wca_id: "2024MELN01",
-    country_iso2: "UA",
-    country_name: "Ukraine",
-    role_id: "r-participant",
-  },
-];
+const INITIAL_COMPETITORS: Competitor[] = [];
 
 const INITIAL_FRONT_ELEMENTS: BadgeElement[] = [
   {
@@ -379,7 +334,9 @@ export const App: React.FC = () => {
   const [wcaCompetitions, setWcaCompetitions] = useState<WCACompetition[]>([]);
   const [wcaToken, setWcaToken] = useState<string | null>(() => localStorage.getItem("wca_token"));
   const [isWcaAuthenticating, setIsWcaAuthenticating] = useState<boolean>(false);
+  const [isGoogleAuthenticating, setIsGoogleAuthenticating] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [needsWcaLink, setNeedsWcaLink] = useState<boolean>(false);
 
   // Modals
   const [isWcaModalOpen, setIsWcaModalOpen] = useState<boolean>(false);
@@ -397,6 +354,7 @@ export const App: React.FC = () => {
       setAuthError(null);
       const redirectUri = `${window.location.origin}/`;
       sessionStorage.setItem("wca_oauth_redirect_uri", redirectUri);
+      sessionStorage.setItem("auth_provider", "wca");
       const res = await fetch(getApiUrl(`/api/wca/oauth/url?redirect_uri=${encodeURIComponent(redirectUri)}`));
       if (res.ok) {
         const data = await res.json();
@@ -413,49 +371,277 @@ export const App: React.FC = () => {
     }
   };
 
-  // Immediate redirect on /login/ route to WCA OAuth
+  // Google OAuth login trigger (carries WCA profile)
+  const handleGoogleOAuthLogin = async (prelinkWcaId?: string) => {
+    try {
+      setIsGoogleAuthenticating(true);
+      setAuthError(null);
+      const redirectUri = `${window.location.origin}/`;
+      sessionStorage.setItem("google_oauth_redirect_uri", redirectUri);
+      sessionStorage.setItem("auth_provider", "google");
+      localStorage.setItem("auth_provider", "google");
+      if (prelinkWcaId) {
+        sessionStorage.setItem("prelink_wca_id", prelinkWcaId);
+        localStorage.setItem("prelink_wca_id", prelinkWcaId);
+      }
+      const res = await fetch(getApiUrl(`/api/auth/google/url?redirect_uri=${encodeURIComponent(redirectUri)}`));
+      if (res.ok) {
+        const data = await res.json();
+        const targetUrl = data.authorization_url || data.cognito_url;
+        if (targetUrl) {
+          window.location.href = targetUrl;
+          return;
+        }
+      }
+      throw new Error("Failed to generate Google authorization URL");
+    } catch (e: any) {
+      console.error("Google OAuth error:", e);
+      setAuthError(e.message || "Failed to start Google login");
+      setIsGoogleAuthenticating(false);
+    }
+  };
+
+  // Immediate redirect on /login/ route to Amazon Cognito Hosted UI sign-in page
   useEffect(() => {
     const path = window.location.pathname;
     if (path === "/login" || path === "/login/" || path.startsWith("/login")) {
-      handleWcaOAuthLogin();
+      const redirectUri = `${window.location.origin}/`;
+      sessionStorage.setItem("cognito_oauth_redirect_uri", redirectUri);
+      sessionStorage.setItem("auth_provider", "cognito");
+      localStorage.setItem("auth_provider", "cognito");
+
+      // Redirect directly to Cognito Managed Login (supporting Email/Password and Google)
+      const cognitoUrl = `https://wca-badges-297580066889.auth.us-east-1.amazoncognito.com/oauth2/authorize?client_id=3eqs900kmd3koe333lg6jl4pl2&response_type=code&scope=openid+email+profile&redirect_uri=${encodeURIComponent(redirectUri)}&state=cognito`;
+      window.location.href = cognitoUrl;
     }
   }, []);
 
-  // Handle WCA OAuth callback URL (?code=...)
+  // Handle OAuth callback URL (?code=...) for either WCA, Google, or Cognito
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
+    const state = params.get("state");
+    const scope = params.get("scope");
+    const errorParam = params.get("error");
+    const errorDescription = params.get("error_description");
+
+    if (errorParam) {
+      setAuthError(errorDescription || `Authentication error: ${errorParam}`);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
     if (code) {
-      setIsWcaAuthenticating(true);
+      // Determine provider reliably:
+      // wca_link = Google user returning from WCA OAuth to link their WCA account
+      const isWcaLink =
+        sessionStorage.getItem("auth_provider") === "wca_link" ||
+        localStorage.getItem("auth_provider") === "wca_link";
+
+      const isCognito =
+        state === "cognito" ||
+        sessionStorage.getItem("auth_provider") === "cognito" ||
+        localStorage.getItem("auth_provider") === "cognito";
+
+      // Google/Cognito passes state="google" | "cognito", scope with "openid", or code
+      const isGoogleOrCognito =
+        !isWcaLink && (
+          isCognito ||
+          state === "google" ||
+          code.startsWith("4/") ||
+          Boolean(scope && (scope.includes("openid") || scope.includes("google"))) ||
+          sessionStorage.getItem("auth_provider") === "google" ||
+          localStorage.getItem("auth_provider") === "google"
+        );
+
+      if (isWcaLink) {
+        // WCA OAuth callback for linking WCA to existing Google account
+        setIsWcaAuthenticating(true);
+        setAuthError(null);
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        const redirect_uri = sessionStorage.getItem("wca_oauth_redirect_uri") || `${window.location.origin}/`;
+        const savedProfile = localStorage.getItem("wca_profile");
+        const savedEmail = savedProfile ? (JSON.parse(savedProfile).email || "") : "";
+
+        sessionStorage.removeItem("auth_provider");
+        localStorage.removeItem("auth_provider");
+
+        fetch(getApiUrl("/api/auth/link-wca"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_email: savedEmail,
+            wca_code: code,
+            redirect_uri,
+          }),
+        })
+          .then(async (res) => {
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              throw new Error(errData.detail || "Failed to link WCA account");
+            }
+            return res.json();
+          })
+          .then((data) => {
+            if (data && data.profile) {
+              setNeedsWcaLink(false);
+              handleLogin(data.access_token, data.profile, data.competitions || []);
+            }
+          })
+          .catch((err: any) => {
+            console.error("WCA Link callback error:", err);
+            setAuthError(err.message || "Failed to link WCA account");
+          })
+          .finally(() => {
+            setIsWcaAuthenticating(false);
+          });
+      } else if (isGoogleOrCognito) {
+        setIsGoogleAuthenticating(true);
+      } else {
+        setIsWcaAuthenticating(true);
+      }
       setAuthError(null);
       window.history.replaceState({}, document.title, window.location.pathname);
-      const redirect_uri = sessionStorage.getItem("wca_oauth_redirect_uri") || `${window.location.origin}/`;
-      fetch(getApiUrl("/api/wca/oauth/callback"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, redirect_uri }),
-      })
-        .then(async (res) => {
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.detail || "Authentication with WCA failed");
-          }
-          return res.json();
+
+      if (isGoogleOrCognito) {
+        const redirect_uri =
+          sessionStorage.getItem("cognito_oauth_redirect_uri") ||
+          sessionStorage.getItem("google_oauth_redirect_uri") ||
+          `${window.location.origin}/`;
+        const wca_id =
+          sessionStorage.getItem("prelink_wca_id") ||
+          localStorage.getItem("prelink_wca_id") ||
+          undefined;
+
+        sessionStorage.removeItem("auth_provider");
+        localStorage.removeItem("auth_provider");
+        sessionStorage.removeItem("cognito_oauth_redirect_uri");
+        sessionStorage.removeItem("prelink_wca_id");
+        localStorage.removeItem("prelink_wca_id");
+
+        fetch(getApiUrl("/api/auth/google/callback"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, redirect_uri, wca_id }),
         })
-        .then((data) => {
-          if (data && data.profile) {
-            handleLogin(data.access_token, data.profile, data.competitions || []);
-          }
+          .then(async (res) => {
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              throw new Error(errData.detail || "Authentication with Google failed");
+            }
+            return res.json();
+          })
+          .then((data) => {
+            if (data && data.profile) {
+              handleLogin(data.access_token, data.profile, data.competitions || []);
+              // If backend says user needs to link WCA account, auto-open profile modal
+              if (data.needs_wca_link || data.profile.needs_wca_link) {
+                setNeedsWcaLink(true);
+                setIsProfileModalOpen(true);
+              }
+            }
+          })
+          .catch((err: any) => {
+            console.error("Google OAuth callback error:", err);
+            setAuthError(err.message || "Failed to complete Google authentication");
+          })
+          .finally(() => {
+            setIsGoogleAuthenticating(false);
+          });
+      } else {
+        const redirect_uri = sessionStorage.getItem("wca_oauth_redirect_uri") || `${window.location.origin}/`;
+        sessionStorage.removeItem("auth_provider");
+        localStorage.removeItem("auth_provider");
+
+        fetch(getApiUrl("/api/wca/oauth/callback"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, redirect_uri }),
         })
-        .catch((err: any) => {
-          console.error("WCA OAuth callback error:", err);
-          setAuthError(err.message || "Failed to complete WCA authentication");
-        })
-        .finally(() => {
-          setIsWcaAuthenticating(false);
-        });
+          .then(async (res) => {
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              throw new Error(errData.detail || "Authentication with WCA failed");
+            }
+            return res.json();
+          })
+          .then((data) => {
+            if (data && data.profile) {
+              handleLogin(data.access_token, data.profile, data.competitions || []);
+            }
+          })
+          .catch((err: any) => {
+            console.error("WCA OAuth callback error:", err);
+            setAuthError(err.message || "Failed to complete WCA authentication");
+          })
+          .finally(() => {
+            setIsWcaAuthenticating(false);
+          });
+      }
     }
   }, []);
+
+  // Link WCA account to active Google user session
+  // Supports: wca_id (manual), wca_code (OAuth code), wca_token (Personal Access Token)
+  const handleLinkWcaAccount = async (wcaId: string) => {
+    const res = await fetch(getApiUrl("/api/auth/link-wca"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_email: wcaProfile?.email || "",
+        wca_id: wcaId,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Failed to link WCA ID ${wcaId}`);
+    }
+    const data = await res.json();
+    setNeedsWcaLink(false);
+    handleLogin(data.access_token, data.profile, data.competitions || []);
+  };
+
+  // Link WCA account via WCA OAuth redirect (for Google users who need to connect WCA)
+  const handleWcaLinkViaOAuth = async () => {
+    try {
+      const redirectUri = `${window.location.origin}/`;
+      sessionStorage.setItem("wca_oauth_redirect_uri", redirectUri);
+      sessionStorage.setItem("auth_provider", "wca_link");
+      localStorage.setItem("auth_provider", "wca_link");
+      const res = await fetch(getApiUrl(`/api/wca/oauth/url?redirect_uri=${encodeURIComponent(redirectUri)}`));
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authorization_url) {
+          window.location.href = data.authorization_url;
+          return;
+        }
+      }
+      throw new Error("Failed to generate WCA authorization URL for linking");
+    } catch (e: any) {
+      console.error("WCA Link OAuth error:", e);
+      setAuthError(e.message || "Failed to start WCA link login");
+    }
+  };
+
+  // Link WCA account via Personal Access Token (for Google users)
+  const handleLinkWcaViaToken = async (token: string) => {
+    const res = await fetch(getApiUrl("/api/auth/link-wca"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_email: wcaProfile?.email || "",
+        wca_token: token,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to link WCA account with token");
+    }
+    const data = await res.json();
+    setNeedsWcaLink(false);
+    handleLogin(data.access_token, data.profile, data.competitions || []);
+  };
 
   // Fetch competitions for active WCA profile
   useEffect(() => {
@@ -1361,6 +1547,8 @@ export const App: React.FC = () => {
         onWcaLogin={handleWcaOAuthLogin}
         onWcaLogout={handleLogout}
         isWcaAuthenticating={isWcaAuthenticating}
+        onGoogleLogin={() => handleGoogleOAuthLogin()}
+        isGoogleAuthenticating={isGoogleAuthenticating}
       />
 
       {/* Auth notification banners */}
@@ -1370,6 +1558,16 @@ export const App: React.FC = () => {
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-blue-200">World Cube Association</div>
             <div className="text-sm font-semibold">Authenticating account & fetching competitions...</div>
+          </div>
+        </div>
+      )}
+
+      {isGoogleAuthenticating && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 animate-fadeIn border border-slate-700">
+          <RefreshCw className="w-5 h-5 animate-spin text-blue-400" />
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-300">Google Authentication</div>
+            <div className="text-sm font-semibold">Connecting account & carrying WCA profile...</div>
           </div>
         </div>
       )}
@@ -1469,6 +1667,12 @@ export const App: React.FC = () => {
         onLogin={handleLogin}
         onLogout={handleLogout}
         onOpenCompetitionImport={() => setIsWcaModalOpen(true)}
+        onGoogleLogin={(wcaId) => handleGoogleOAuthLogin(wcaId)}
+        onLinkWca={handleLinkWcaAccount}
+        onWcaLinkViaOAuth={handleWcaLinkViaOAuth}
+        onLinkWcaViaToken={handleLinkWcaViaToken}
+        isGoogleAuthenticating={isGoogleAuthenticating}
+        needsWcaLink={needsWcaLink}
       />
 
       {/* WCA Competition Import Modal (Filtered by user roles: Approved, Pending, Cancelled) */}

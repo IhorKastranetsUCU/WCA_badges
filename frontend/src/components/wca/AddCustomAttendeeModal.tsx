@@ -156,7 +156,7 @@ export const AddCustomAttendeeModal: React.FC<AddCustomAttendeeModalProps> = ({
               <label className="text-xs font-bold text-slate-700 block mb-1">WCA ID (Optional)</label>
               <input
                 type="text"
-                placeholder="e.g. 2018SHEV01"
+                placeholder="e.g. 2024EXAM01"
                 value={wcaId}
                 onChange={(e) => setWcaId(e.target.value)}
                 className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 uppercase"

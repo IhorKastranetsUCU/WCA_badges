@@ -87,7 +87,23 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
     if not clean_token:
         raise HTTPException(status_code=401, detail="Missing WCA token")
 
-    # If user entered a WCA ID directly (e.g. 2018SHEV01)
+    # If token is a self-contained Google session token
+    if clean_token.startswith("gtok_"):
+        from app.services.google_auth import decode_profile_token
+        decoded = decode_profile_token(clean_token)
+        if decoded:
+            return decoded
+
+    # If token is in Google Profile Cache
+    from app.services.google_auth import GOOGLE_PROFILE_CACHE
+    if clean_token in GOOGLE_PROFILE_CACHE:
+        return GOOGLE_PROFILE_CACHE[clean_token]
+
+    # Handle linked WCA tokens e.g. wca_linked_2024EXAM01
+    if clean_token.startswith("wca_linked_"):
+        clean_token = clean_token.replace("wca_linked_", "").strip()
+
+    # If user entered a WCA ID directly (e.g. 2024EXAM01)
     if re.match(r"^\d{4}[A-Za-z]{4}\d{2}$", clean_token):
         wca_id_upper = clean_token.upper()
         try:
@@ -197,6 +213,9 @@ async def get_competitions_for_user(
 
     results: List[WCACompetition] = []
     seen_ids = set()
+
+    if clean_token and (clean_token.startswith("gtok_") or clean_token.startswith("wca_linked_")):
+        clean_token = None
 
     if clean_token:
         try:

@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     WCA_OAUTH_TOKEN_URL: str = "https://www.worldcubeassociation.org/oauth/token"
     WCA_API_URL: str = "https://www.worldcubeassociation.org/api/v0"
 
+    # Google OAuth & Cognito Configuration
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    COGNITO_DOMAIN_PREFIX: str = "wca-badges-297580066889"
+    COGNITO_USER_POOL_CLIENT_ID: str = "3eqs900kmd3koe333lg6jl4pl2"
+    COGNITO_REGION: str = "us-east-1"
+
     @property
     def cors_origin_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

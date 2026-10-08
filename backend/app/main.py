@@ -7,6 +7,7 @@ from app.api.badges import router as badges_router
 from app.api.competitors import router as competitors_router
 from app.api.roles import router as roles_router
 from app.api.wca import router as wca_router
+from app.api.auth import router as auth_router
 from sqlalchemy import select, text
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine, Base
@@ -19,7 +20,10 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            await conn.execute(text("ALTER TABLE competitors ADD COLUMN IF NOT EXISTS avatar_url TEXT;"))
+            try:
+                await conn.execute(text("ALTER TABLE competitors ADD COLUMN IF NOT EXISTS avatar_url TEXT;"))
+            except Exception:
+                pass
 
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(Role).where(Role.is_default == True))  # noqa: E712
@@ -82,3 +86,4 @@ app.include_router(competitors_router, prefix="/api")
 app.include_router(roles_router, prefix="/api")
 app.include_router(badges_router, prefix="/api")
 app.include_router(wca_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")

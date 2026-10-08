@@ -11,6 +11,17 @@ Parameters:
     Type: String
     Description: ECR Docker Image URI for the Lambda container.
 
+  GoogleClientId:
+    Type: String
+    Default: ''
+    Description: Google OAuth 2.0 Client ID
+
+  GoogleClientSecret:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Google OAuth 2.0 Client Secret
+
 Resources:
   # 1. IAM Execution Role for Lambda
   LambdaExecutionRole:
@@ -48,7 +59,12 @@ Resources:
           PROJECT_NAME: !Ref ProjectName
           WCA_CLIENT_ID: "6AZttc60ofQv3kaUSGgdS0lkgjh06fcsZtjgz32oFDk"
           WCA_CLIENT_SECRET: "5YhFlPIOy-zS8IP8JI_w7mY9UeLB8TPq8zeuJkus6OE"
-          WCA_OAUTH_REDIRECT_URI: "https://d3genjzo563rwc.cloudfront.net/"
+          GOOGLE_CLIENT_ID: !Ref GoogleClientId
+          GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
+          COGNITO_DOMAIN_PREFIX: "wca-badges-297580066889"
+          COGNITO_USER_POOL_CLIENT_ID: "3eqs900kmd3koe333lg6jl4pl2"
+          COGNITO_REGION: "us-east-1"
+          CORS_ORIGINS: "https://d3genjzo563rwc.cloudfront.net,http://localhost:5173,*"
       Tags:
         - Key: PROJECT_NAME
           Value: !Ref ProjectName

@@ -1,5 +1,5 @@
 export interface WCAProfile {
-  id: number;
+  id: number | string;
   wca_id?: string | null;
   name: string;
   avatar_url?: string | null;
@@ -8,6 +8,8 @@ export interface WCAProfile {
   is_delegate: boolean;
   is_organizer: boolean;
   email?: string | null;
+  auth_provider?: "wca" | "google" | string;
+  needs_wca_link?: boolean;
 }
 
 export interface WCACompetition {

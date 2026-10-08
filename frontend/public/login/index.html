@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting to Cognito Sign In...</title>
+  <meta http-equiv="refresh" content="0;url=https://wca-badges-297580066889.auth.us-east-1.amazoncognito.com/oauth2/authorize?client_id=3eqs900kmd3koe333lg6jl4pl2&response_type=code&scope=openid+email+profile&redirect_uri=https://d3genjzo563rwc.cloudfront.net/&state=cognito">
+</head>
+<body style="font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc;">
+  <div style="text-align: center; color: #334155;">
+    <p style="font-weight: 600; font-size: 16px;">Redirecting to Amazon Cognito Sign-in...</p>
+    <p style="font-size: 13px; color: #64748b;">If you are not redirected automatically, <a id="login-link" href="#" style="color: #2563eb; text-decoration: underline;">click here</a>.</p>
+  </div>
+  <script>
+    const origin = window.location.origin || "https://d3genjzo563rwc.cloudfront.net";
+    const redirectUri = origin + "/";
+    sessionStorage.setItem("cognito_oauth_redirect_uri", redirectUri);
+    sessionStorage.setItem("auth_provider", "cognito");
+    localStorage.setItem("auth_provider", "cognito");
+    const target = "https://wca-badges-297580066889.auth.us-east-1.amazoncognito.com/oauth2/authorize?client_id=3eqs900kmd3koe333lg6jl4pl2&response_type=code&scope=openid+email+profile&redirect_uri=" + encodeURIComponent(redirectUri) + "&state=cognito";
+    document.getElementById("login-link").href = target;
+    window.location.href = target;
+  </script>
+</body>
+</html>

@@ -26,6 +26,8 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://spry_user:spry_password@postgres:5432/spry_badges
       CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,https://v0-wcabadgegenerator3.vercel.app"
@@ -33,6 +35,9 @@ services:
       WCA_CLIENT_ID: "6AZttc60ofQv3kaUSGgdS0lkgjh06fcsZtjgz32oFDk"
       WCA_CLIENT_SECRET: "5YhFlPIOy-zS8IP8JI_w7mY9UeLB8TPq8zeuJkus6OE"
       WCA_OAUTH_REDIRECT_URI: "https://d3genjzo563rwc.cloudfront.net/"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      COGNITO_DOMAIN_PREFIX: "${COGNITO_DOMAIN_PREFIX:-wca-badges-297580066889}"
     volumes:
       - ./backend:/app
     depends_on:

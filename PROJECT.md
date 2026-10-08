@@ -182,7 +182,7 @@ Uploads a standard WCA registration export CSV file.
       "name_latin": "Ihor Shevchenko",
       "name_local": "Ігор Шевченко",
       "name_raw": "Ihor Shevchenko (Ігор Шевченко)",
-      "wca_id": "2018SHEV01",
+      "wca_id": "2024EXAM01",
       "country_iso2": "UA",
       "country_name": "Ukraine",
       "role_id": "r-participant",
@@ -235,7 +235,7 @@ Exchanges authorization code for access token, fetches profile details, and retr
   "access_token": "...",
   "profile": {
     "id": 18942,
-    "wca_id": "2018SHEV01",
+    "wca_id": "2024EXAM01",
     "name": "Ihor Shevchenko",
     "avatar_url": "https://...",
     "country_iso2": "UA",
@@ -293,27 +293,27 @@ Fetches live registrations from the WCA API, separated into three strict categor
       "name_latin": "Ihor Shevchenko",
       "name_local": "Ігор Шевченко",
       "name_raw": "Ihor Shevchenko (Ігор Шевченко)",
-      "wca_id": "2018SHEV01",
+      "wca_id": "2024EXAM01",
       "country_iso2": "UA",
       "country_name": "Ukraine",
       "status": "accepted",
       "selected": true,
-      "competition_id": "KyivSpring2026"
+      "competition_id": "SampleComp2026"
     }
   ],
   "pending": [
     {
       "id": "wca-reg-2",
       "user_id": 2,
-      "name_latin": "Artem Zhuravsky",
-      "name_local": "Артем Журавський",
-      "name_raw": "Artem Zhuravsky (Артем Журавський)",
-      "wca_id": "2022ZHUR01",
+      "name_latin": "Sample Competitor",
+      "name_local": "",
+      "name_raw": "Sample Competitor",
+      "wca_id": "2024SAMP01",
       "country_iso2": "UA",
       "country_name": "Ukraine",
       "status": "pending",
       "selected": false,
-      "competition_id": "KyivSpring2026"
+      "competition_id": "SampleComp2026"
     }
   ],
   "cancelled": [

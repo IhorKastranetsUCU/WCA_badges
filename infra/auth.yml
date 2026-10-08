@@ -109,7 +109,7 @@ Resources:
         Fn::If:
           - HasGoogleCredentials
           - - COGNITO
-            - Google
+            - !Ref GoogleIdentityProvider
           - - COGNITO
       CallbackURLs:
         - !Sub '${FrontendUrl}/'

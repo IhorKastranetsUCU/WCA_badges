@@ -24,14 +24,14 @@ def test_resolve_country_iso2():
 def test_parse_wca_csv():
     csv_sample = (
         "Name,WCA ID,Country,Status\n"
-        "Ihor Shevchenko (Ігор Шевченко),2018SHEV01,Ukraine,Accepted\n"
+        "Petro Petrenko (Петро Петренко),2015BOGD01,Ukraine,Accepted\n"
         "John Doe,,United States,Accepted\n"
         "Cancelled Person,,Ukraine,Deleted\n"
     ).encode("utf-8")
     records = parse_wca_csv(csv_sample)
     assert len(records) == 2
-    assert records[0]["name_latin"] == "Ihor Shevchenko"
-    assert records[0]["name_local"] == "Ігор Шевченко"
+    assert records[0]["name_latin"] == "Petro Petrenko"
+    assert records[0]["name_local"] == "Петро Петренко"
     assert records[0]["country_iso2"] == "UA"
     assert records[1]["name_latin"] == "John Doe"
     assert records[1]["wca_id"] is None
@@ -174,4 +174,41 @@ async def test_delete_competitor_endpoint():
         # Deleting again should 404
         del_res2 = await ac.delete(f"/api/competitors/{comp_id}")
         assert del_res2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_google_auth_and_account_linking():
+    from httpx import AsyncClient, ASGITransport
+    from app.main import app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # 1. Get Google auth URLs
+        url_res = await ac.get("/api/auth/google/url")
+        assert url_res.status_code == 200
+        data = url_res.json()
+        assert "authorization_url" in data
+        assert "cognito_url" in data
+        assert data["provider"] == "google"
+
+        # 2. Simulate Google callback with linked WCA ID
+        cb_res = await ac.post(
+            "/api/auth/google/callback",
+            json={"code": "sample_code_123", "redirect_uri": "http://localhost:5173/", "wca_id": "2009ZEMD01"},
+        )
+        assert cb_res.status_code == 200
+        auth_data = cb_res.json()
+        assert auth_data["provider"] == "google"
+        assert auth_data["profile"]["wca_id"] == "2009ZEMD01"
+        assert auth_data["profile"]["auth_provider"] == "google"
+
+        # 3. Test link-wca endpoint
+        link_res = await ac.post(
+            "/api/auth/link-wca",
+            json={"wca_id": "2009ZEMD01", "user_email": "user@gmail.com"},
+        )
+        assert link_res.status_code == 200
+        linked_data = link_res.json()
+        assert linked_data["profile"]["wca_id"] == "2009ZEMD01"
+        assert linked_data["profile"]["auth_provider"] == "google"
+
 
