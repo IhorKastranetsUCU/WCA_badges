@@ -109,6 +109,9 @@ aws-deploy-frontend:
 	aws cloudfront create-invalidation --distribution-id $(CLOUDFRONT_DIST_ID) --paths "/*"
 	@echo "==> Frontend is live at https://$(CLOUDFRONT_DOMAIN)"
 
+deploy-frontend: aws-deploy-frontend
+deploy-backend: aws-deploy-backend
+
 aws-deploy-reports:
 	@echo "==> Deploying Reports Event-Driven Stack (infra/reports.yml)..."
 	aws cloudformation deploy \
