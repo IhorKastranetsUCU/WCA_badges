@@ -109,5 +109,30 @@ aws-deploy-frontend:
 	aws cloudfront create-invalidation --distribution-id $(CLOUDFRONT_DIST_ID) --paths "/*"
 	@echo "==> Frontend is live at https://$(CLOUDFRONT_DOMAIN)"
 
-aws-deploy-all: aws-deploy-backend aws-deploy-auth aws-deploy-frontend
+aws-deploy-reports:
+	@echo "==> Deploying Reports Event-Driven Stack (infra/reports.yml)..."
+	aws cloudformation deploy \
+	  --template-file infra/reports.yml \
+	  --stack-name $(PROJECT_NAME)-reports \
+	  --parameter-overrides \
+	    ProjectName=$(PROJECT_NAME) \
+	    ImageUri=$(ECR_REPO_URL):latest \
+	    SenderEmail="$(if $(SENDER_EMAIL),$(SENDER_EMAIL),kastranets.pn@ucu.edu.ua)" \
+	    RecipientEmail="$(if $(RECIPIENT_EMAIL),$(RECIPIENT_EMAIL),kastranets.pn@ucu.edu.ua)" \
+	  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+	  --region $(AWS_REGION)
+
+report-now:
+	@if [ -z "$(WEEK)" ]; then \
+		echo "Usage: make report-now WEEK=2026-W40"; \
+		exit 1; \
+	fi
+	@QUEUE_URL=$$(aws cloudformation describe-stacks --stack-name $(PROJECT_NAME)-reports --query "Stacks[0].Outputs[?OutputKey=='ReportRequestsQueueUrl'].OutputValue" --output text --region $(AWS_REGION)); \
+	echo "==> Sending report request for WEEK=$(WEEK) to $$QUEUE_URL..."; \
+	aws sqs send-message \
+	  --queue-url $$QUEUE_URL \
+	  --message-body '{"week": "$(WEEK)", "source": "make"}' \
+	  --region $(AWS_REGION)
+
+aws-deploy-all: aws-deploy-backend aws-deploy-auth aws-deploy-frontend aws-deploy-reports
 	@echo "==> Full serverless deployment complete!"
