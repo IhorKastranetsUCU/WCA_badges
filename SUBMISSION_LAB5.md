@@ -8,7 +8,11 @@
 
 ---
 
-## 1. CloudFormation Stack & Resources Summary
+## 1. Commit Link
+👉 **[GitHub Commit c27e228](https://github.com/IhorKastranetsUCU/WCA_badges/commit/c27e228)**  
+*(Full feature commit range: [`2ae2786..c27e228`](https://github.com/IhorKastranetsUCU/WCA_badges/compare/8ea335f...c27e228))*
+
+---
 
 The entire event-driven architecture is defined as code in [`infra/reports.yml`](file:///Users/ihor/Studing/ad/WCA_badges/infra/reports.yml) and deployed to AWS:
 
