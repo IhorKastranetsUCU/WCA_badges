@@ -24,10 +24,14 @@ export async function generateBadgesPdfBlob(
   roles: Role[],
   options: ExportPdfOptions = {}
 ): Promise<Blob> {
+  const hasBack =
+    Boolean(template?.sides?.back?.background_url) ||
+    (template?.sides?.back?.elements || []).some((el: any) => el.enabled !== false);
+
   const {
     paper_size = "A4",
-    side = "both",
-    parity = "front_even",
+    side = hasBack ? "both" : "front",
+    parity = "front_odd",
     crop_marks = true,
     schedule_data,
   } = options;

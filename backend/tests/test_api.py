@@ -197,6 +197,102 @@ def test_render_badges_pdf_multiple_competitors():
     assert pdf_bytes_a4.count(b"/Type /Page\n") == 7 or pdf_bytes_a4.count(b"/Type /Page") >= 7
 
 
+def test_render_badges_pdf_duplex_parity_and_sides():
+    import io
+
+    import pypdf
+
+    from app.services.pdf_generator import render_badges_pdf
+
+    dims = {"preset": "100x70", "width_mm": 100.0, "height_mm": 70.0}
+    sides = {
+        "front": {
+            "elements": [
+                {
+                    "type": "name",
+                    "enabled": True,
+                    "position": {
+                        "x_mm": 10.0,
+                        "y_mm": 20.0,
+                        "width_mm": 80.0,
+                        "height_mm": 10.0,
+                    },
+                    "style": {"font_size": 14},
+                }
+            ]
+        },
+        "back": {
+            "elements": [
+                {
+                    "type": "name",
+                    "enabled": True,
+                    "position": {
+                        "x_mm": 10.0,
+                        "y_mm": 20.0,
+                        "width_mm": 80.0,
+                        "height_mm": 10.0,
+                    },
+                    "style": {"font_size": 14},
+                }
+            ]
+        },
+    }
+    comps = [{"name_latin": "Front Competitor", "country_iso2": "UA"}]
+    roles = {}
+
+    # Default parity is now front_odd: Page 1 = Front, Page 2 = Back
+    pdf_odd = render_badges_pdf(comps, roles, dims, sides, side_to_export="both")
+    reader_odd = pypdf.PdfReader(io.BytesIO(pdf_odd))
+    assert len(reader_odd.pages) == 2
+    assert "Front Competitor" in reader_odd.pages[0].extract_text()
+
+    # Reversed parity front_even: Page 1 = Back, Page 2 = Front
+    pdf_even = render_badges_pdf(
+        comps, roles, dims, sides, side_to_export="both", parity="front_even"
+    )
+    reader_even = pypdf.PdfReader(io.BytesIO(pdf_even))
+    assert len(reader_even.pages) == 2
+    assert "Front Competitor" in reader_even.pages[1].extract_text()
+
+    # Front only: 1 page
+    pdf_front = render_badges_pdf(comps, roles, dims, sides, side_to_export="front")
+    reader_front = pypdf.PdfReader(io.BytesIO(pdf_front))
+    assert len(reader_front.pages) == 1
+    assert "Front Competitor" in reader_front.pages[0].extract_text()
+
+
+def test_render_badges_pdf_svg_avatar_resilience():
+    from app.services.pdf_generator import render_badges_pdf
+
+    dims = {"preset": "100x70", "width_mm": 100.0, "height_mm": 70.0}
+    sides = {
+        "front": {
+            "elements": [
+                {
+                    "type": "avatar",
+                    "enabled": True,
+                    "position": {
+                        "x_mm": 10.0,
+                        "y_mm": 10.0,
+                        "width_mm": 30.0,
+                        "height_mm": 30.0,
+                    },
+                }
+            ]
+        }
+    }
+    comps_with_svg = [
+        {
+            "name_latin": "SVG User",
+            "country_iso2": "UA",
+            "avatar_url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==",
+        }
+    ]
+    # Should not raise exception
+    pdf_bytes = render_badges_pdf(comps_with_svg, {}, dims, sides, side_to_export="front")
+    assert len(pdf_bytes) > 500
+
+
 @pytest.mark.asyncio
 async def test_delete_competitor_endpoint():
     from httpx import ASGITransport, AsyncClient

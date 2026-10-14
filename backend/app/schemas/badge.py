@@ -94,7 +94,7 @@ class ExportPDFRequest(BaseModel):
     template_id: str | None = "current"
     side: Literal["front", "back", "both"] = "front"
     paper_size: Literal["A4", "A5", "Letter", "Legal", "Single"] = "A4"
-    parity: Literal["front_even", "front_odd"] = "front_even"
+    parity: Literal["front_odd", "front_even"] = "front_odd"
     crop_marks: bool = True
     template_override: dict[str, Any] | None = None
     competitors: list[dict[str, Any]] | None = None

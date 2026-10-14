@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   X,
   Download,
@@ -53,12 +53,26 @@ export const ExportPdfModal: React.FC<ExportPdfModalProps> = ({
   roles,
   scheduleData,
 }) => {
+  const hasBackContent = useMemo(() => {
+    const backDef = template?.sides?.back;
+    if (!backDef) return false;
+    if (backDef.background_url) return true;
+    return (backDef.elements || []).some((el: any) => el.enabled !== false);
+  }, [template]);
+
   const [paperSize, setPaperSize] = useState<"A4" | "A5" | "Letter" | "Legal" | "Single">("A4");
-  const [side, setSide] = useState<"both" | "front" | "back">("both");
-  const [parity, setParity] = useState<"front_even" | "front_odd">("front_even");
+  const [side, setSide] = useState<"both" | "front" | "back">("front");
+  const [parity, setParity] = useState<"front_even" | "front_odd">("front_odd");
   const [cropMarks, setCropMarks] = useState<boolean>(true);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
+
+  // Sync default side when modal opens or template changes
+  useEffect(() => {
+    if (isOpen) {
+      setSide(hasBackContent ? "both" : "front");
+    }
+  }, [isOpen, hasBackContent]);
 
   // Preview Navigation & State
   const [previewTab, setPreviewTab] = useState<"sheet" | "pdf">("sheet");
@@ -380,7 +394,7 @@ export const ExportPdfModal: React.FC<ExportPdfModalProps> = ({
               <label className="text-xs font-bold text-slate-700 block">Badge Sides</label>
               <div className="grid grid-cols-3 gap-1.5">
                 {[
-                  { id: "both", label: "Both Sides", desc: "Duplex" },
+                  { id: "both", label: "Both Sides", desc: hasBackContent ? "Duplex" : "Empty back" },
                   { id: "front", label: "Front Only", desc: "1-sided" },
                   { id: "back", label: "Back Only", desc: "Reverse" },
                 ].map((opt) => {
@@ -416,29 +430,6 @@ export const ExportPdfModal: React.FC<ExportPdfModalProps> = ({
 
                 <div className="space-y-1.5">
                   <label
-                    onClick={() => setParity("front_even")}
-                    className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
-                      parity === "front_even"
-                        ? "bg-blue-50/80 border-blue-300 text-blue-950 font-medium"
-                        : "bg-white border-slate-200 text-slate-700"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="parity"
-                      checked={parity === "front_even"}
-                      onChange={() => setParity("front_even")}
-                      className="mt-0.5 text-blue-600 accent-blue-600"
-                    />
-                    <div className="text-[11px] leading-tight">
-                      <div className="font-bold">Front: Even pages, Back: Odd pages</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        P1: Back • P2: Front • P3: Back • P4: Front
-                      </div>
-                    </div>
-                  </label>
-
-                  <label
                     onClick={() => setParity("front_odd")}
                     className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
                       parity === "front_odd"
@@ -454,9 +445,32 @@ export const ExportPdfModal: React.FC<ExportPdfModalProps> = ({
                       className="mt-0.5 text-blue-600 accent-blue-600"
                     />
                     <div className="text-[11px] leading-tight">
-                      <div className="font-bold">Front: Odd pages, Back: Even pages</div>
+                      <div className="font-bold">Standard: Front on Odd, Back on Even</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
                         P1: Front • P2: Back • P3: Front • P4: Back
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    onClick={() => setParity("front_even")}
+                    className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
+                      parity === "front_even"
+                        ? "bg-blue-50/80 border-blue-300 text-blue-950 font-medium"
+                        : "bg-white border-slate-200 text-slate-700"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="parity"
+                      checked={parity === "front_even"}
+                      onChange={() => setParity("front_even")}
+                      className="mt-0.5 text-blue-600 accent-blue-600"
+                    />
+                    <div className="text-[11px] leading-tight">
+                      <div className="font-bold">Reversed: Back on Odd, Front on Even</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        P1: Back • P2: Front • P3: Back • P4: Front
                       </div>
                     </div>
                   </label>

@@ -221,6 +221,8 @@ def get_optimized_avatar(
 
     try:
         if avatar_url.startswith("data:image"):
+            if "image/svg+xml" in avatar_url:
+                return None
             _, b64 = avatar_url.split(",", 1)
             raw_bytes = base64.b64decode(b64)
             img = Image.open(io.BytesIO(raw_bytes))
@@ -228,8 +230,15 @@ def get_optimized_avatar(
             import urllib.request
 
             req = urllib.request.Request(avatar_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
-                img = Image.open(io.BytesIO(resp.read()))
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
+                content = resp.read()
+                if (
+                    resp.headers.get_content_type() == "image/svg+xml"
+                    or content.startswith(b"<?xml")
+                    or content.startswith(b"<svg")
+                ):
+                    return None
+                img = Image.open(io.BytesIO(content))
         elif os.path.exists(avatar_url):
             img = Image.open(avatar_url)
         else:
@@ -1111,7 +1120,7 @@ def render_badges_pdf(
     sides_config: dict[str, Any],
     side_to_export: str = "both",
     paper_size: str = "A4",
-    parity: str = "front_even",
+    parity: str = "front_odd",
     crop_marks: bool = True,
     schedule_data: dict[str, Any] | None = None,
 ) -> bytes:
