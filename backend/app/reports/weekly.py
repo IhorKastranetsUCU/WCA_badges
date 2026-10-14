@@ -42,8 +42,8 @@ async def ensure_tables_and_seed(session: AsyncSession, engine) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    result = await session.execute(select(Meeting).limit(1))
-    if result.scalars().first() is not None:
+    result = await session.execute(select(Meeting.id).limit(1))
+    if result.scalar_one_or_none() is not None:
         return
 
     logger.info(
@@ -123,8 +123,10 @@ async def _build_weekly_report_async(week: str) -> bytes:
             await ensure_tables_and_seed(session, scoped_engine)
             curr_meetings = await _query_meetings_for_range(session, start_curr, end_curr)
             prev_meetings = await _query_meetings_for_range(session, start_prev, end_prev)
+            await session.commit()
     finally:
         await scoped_engine.dispose()
+        await asyncio.sleep(0.05)
 
     # 1. Metrics required by lab:
     curr_count = len(curr_meetings)
