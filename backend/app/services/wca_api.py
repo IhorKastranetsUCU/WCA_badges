@@ -1,7 +1,11 @@
 import logging
-from typing import Any, Dict, List, Optional
-import httpx
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
+
+import httpx
+from fastapi import HTTPException
 
 from app.core.config import settings
 from app.schemas.wca import (
@@ -14,20 +18,16 @@ from app.services.csv_parser import parse_wca_name, resolve_country_iso2
 
 logger = logging.getLogger(__name__)
 
-DEMO_PROFILES: Dict[str, WCAProfile] = {}
-
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-from fastapi import HTTPException
+DEMO_PROFILES: dict[str, WCAProfile] = {}
 
 # Competitions associated with organizers & delegates
-DATABASE_COMPETITIONS: List[Dict[str, Any]] = []
+DATABASE_COMPETITIONS: list[dict[str, Any]] = []
 
 # Registration records per competition
-SAMPLE_REGISTRATIONS: Dict[str, List[Dict[str, Any]]] = {}
+SAMPLE_REGISTRATIONS: dict[str, list[dict[str, Any]]] = {}
 
 
-def get_wca_authorization_url(redirect_uri: Optional[str] = None) -> Dict[str, str]:
+def get_wca_authorization_url(redirect_uri: str | None = None) -> dict[str, str]:
     """
     Constructs the OAuth2 authorization URL for the World Cube Association.
     Supports dynamic redirect_uri (e.g. http://localhost:5173/ for local dev).
@@ -47,7 +47,7 @@ def get_wca_authorization_url(redirect_uri: Optional[str] = None) -> Dict[str, s
     }
 
 
-async def exchange_wca_code(code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
+async def exchange_wca_code(code: str, redirect_uri: str | None = None) -> dict[str, Any]:
     """
     Exchanges an OAuth authorization code for an access token with WCA.
     """
@@ -80,6 +80,7 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
     Supports Personal Access Tokens, OAuth Bearer tokens, or direct WCA IDs.
     """
     import re
+
     clean_token = token.strip().strip("\"'").strip()
     if clean_token.lower().startswith("bearer "):
         clean_token = clean_token[7:].strip()
@@ -90,12 +91,14 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
     # If token is a self-contained Google session token
     if clean_token.startswith("gtok_"):
         from app.services.google_auth import decode_profile_token
+
         decoded = decode_profile_token(clean_token)
         if decoded:
             return decoded
 
     # If token is in Google Profile Cache
     from app.services.google_auth import GOOGLE_PROFILE_CACHE
+
     if clean_token in GOOGLE_PROFILE_CACHE:
         return GOOGLE_PROFILE_CACHE[clean_token]
 
@@ -115,7 +118,9 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
                 if p_res.status_code == 200:
                     p_data = p_res.json().get("person", {})
                     av = p_data.get("avatar", {})
-                    av_url = av.get("url") or av.get("thumb_url") if not av.get("is_default") else None
+                    av_url = (
+                        av.get("url") or av.get("thumb_url") if not av.get("is_default") else None
+                    )
                     return WCAProfile(
                         id=p_data.get("id", 1),
                         wca_id=p_data.get("wca_id", wca_id_upper),
@@ -144,14 +149,20 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
             logger.info(f"WCA /me response status: {res.status_code}")
             if res.status_code == 200:
                 raw_data = res.json()
-                data = raw_data.get("me") if (isinstance(raw_data, dict) and "me" in raw_data) else raw_data
+                data = (
+                    raw_data.get("me")
+                    if (isinstance(raw_data, dict) and "me" in raw_data)
+                    else raw_data
+                )
                 wca_id = data.get("wca_id")
                 del_status = data.get("delegate_status")
                 return WCAProfile(
                     id=data.get("id", 1),
                     wca_id=wca_id,
                     name=data.get("name", "WCA User"),
-                    avatar_url=data.get("avatar", {}).get("url") if isinstance(data.get("avatar"), dict) else None,
+                    avatar_url=data.get("avatar", {}).get("url")
+                    if isinstance(data.get("avatar"), dict)
+                    else None,
                     country_iso2=data.get("country_iso2", "UA"),
                     delegate_status=del_status,
                     is_delegate=del_status is not None,
@@ -160,16 +171,27 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
                 )
             elif res.status_code == 401:
                 # If token might be a WCA ID that didn't match regex exactly, try person lookup
-                if len(clean_token) >= 8 and len(clean_token) <= 12 and any(ch.isdigit() for ch in clean_token):
+                if (
+                    len(clean_token) >= 8
+                    and len(clean_token) <= 12
+                    and any(ch.isdigit() for ch in clean_token)
+                ):
                     try:
                         p_res = await client.get(
                             f"{settings.WCA_API_URL}/persons/{clean_token.upper()}",
-                            headers={"User-Agent": "WCA-Badge-Generator/1.0", "Accept": "application/json"},
+                            headers={
+                                "User-Agent": "WCA-Badge-Generator/1.0",
+                                "Accept": "application/json",
+                            },
                         )
                         if p_res.status_code == 200:
                             p_data = p_res.json().get("person", {})
                             av = p_data.get("avatar", {})
-                            av_url = av.get("url") or av.get("thumb_url") if not av.get("is_default") else None
+                            av_url = (
+                                av.get("url") or av.get("thumb_url")
+                                if not av.get("is_default")
+                                else None
+                            )
                             return WCAProfile(
                                 id=p_data.get("id", 1),
                                 wca_id=p_data.get("wca_id", clean_token.upper()),
@@ -202,8 +224,8 @@ async def fetch_wca_me_profile(token: str) -> WCAProfile:
 
 async def get_competitions_for_user(
     profile: WCAProfile,
-    token: Optional[str] = None,
-) -> List[WCACompetition]:
+    token: str | None = None,
+) -> list[WCACompetition]:
     """
     Returns competitions where the user has a role (Delegate or Organizer) from live WCA API.
     """
@@ -211,7 +233,7 @@ async def get_competitions_for_user(
     if clean_token and clean_token.lower().startswith("bearer "):
         clean_token = clean_token[7:].strip()
 
-    results: List[WCACompetition] = []
+    results: list[WCACompetition] = []
     seen_ids = set()
 
     if clean_token and (clean_token.startswith("gtok_") or clean_token.startswith("wca_linked_")):
@@ -236,10 +258,20 @@ async def get_competitions_for_user(
                             continue
                         seen_ids.add(c_id)
 
-                        del_names = [d.get("name", "") if isinstance(d, dict) else str(d) for d in c.get("delegates", [])]
-                        org_names = [o.get("name", "") if isinstance(o, dict) else str(o) for o in c.get("organizers", [])]
-                        is_del = profile.name in del_names or (profile.wca_id and profile.wca_id in str(c.get("delegates", [])))
-                        is_org = profile.name in org_names or (profile.wca_id and profile.wca_id in str(c.get("organizers", [])))
+                        del_names = [
+                            d.get("name", "") if isinstance(d, dict) else str(d)
+                            for d in c.get("delegates", [])
+                        ]
+                        org_names = [
+                            o.get("name", "") if isinstance(o, dict) else str(o)
+                            for o in c.get("organizers", [])
+                        ]
+                        is_del = profile.name in del_names or (
+                            profile.wca_id and profile.wca_id in str(c.get("delegates", []))
+                        )
+                        is_org = profile.name in org_names or (
+                            profile.wca_id and profile.wca_id in str(c.get("organizers", []))
+                        )
 
                         roles = []
                         if is_del:
@@ -268,7 +300,7 @@ async def get_competitions_for_user(
     return results
 
 
-async def get_wca_competition_info(competition_id: str) -> Optional[WCACompetition]:
+async def get_wca_competition_info(competition_id: str) -> WCACompetition | None:
     """
     Fetches public metadata for any WCA competition by ID.
     """
@@ -297,10 +329,10 @@ async def get_wca_competition_info(competition_id: str) -> Optional[WCACompetiti
     return None
 
 
-_WCIF_CACHE: Dict[str, Any] = {}
+_WCIF_CACHE: dict[str, Any] = {}
 
 
-async def get_wcif_data(competition_id: str, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+async def get_wcif_data(competition_id: str, token: str | None = None) -> dict[str, Any] | None:
     """
     Fetches and caches the official WCIF data (including schedule and Groupifier assignments).
     """
@@ -319,7 +351,9 @@ async def get_wcif_data(competition_id: str, token: Optional[str] = None) -> Opt
     async with httpx.AsyncClient(timeout=30.0) as client:
         if headers:
             try:
-                res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif", headers=headers)
+                res = await client.get(
+                    f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif", headers=headers
+                )
                 if res.status_code == 200:
                     wcif = res.json()
             except Exception as e:
@@ -327,7 +361,9 @@ async def get_wcif_data(competition_id: str, token: Optional[str] = None) -> Opt
 
         if not wcif:
             try:
-                res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif/public")
+                res = await client.get(
+                    f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif/public"
+                )
                 if res.status_code == 200:
                     wcif = res.json()
             except Exception as e:
@@ -340,10 +376,10 @@ async def get_wcif_data(competition_id: str, token: Optional[str] = None) -> Opt
 
 async def fetch_wca_competition_schedule(
     competition_id: str,
-    token: Optional[str] = None,
-    registrant_id: Optional[int] = None,
-    wca_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    token: str | None = None,
+    registrant_id: int | None = None,
+    wca_id: str | None = None,
+) -> dict[str, Any]:
     """
     Fetches the WCIF schedule for a competition directly from WCA API,
     converts UTC times to venue local timezone, attaches room colors,
@@ -376,22 +412,23 @@ async def fetch_wca_competition_schedule(
     try:
         tz = ZoneInfo(tz_str)
     except Exception:
-        tz = timezone.utc
+        tz = UTC
 
     # If registrant_id or wca_id is provided, map personal assignments
-    person_tasks: Dict[int, str] = {}  # activity_id -> task code ("C", "J", "S", "R")
-    person_groups: Dict[str, str] = {}  # event_code -> group_str (e.g. "Gr 2 (St 10)")
-    
+    person_tasks: dict[int, str] = {}  # activity_id -> task code ("C", "J", "S", "R")
+
     target_person = None
     if registrant_id or wca_id:
         for p in wcif_data.get("persons", []):
-            if (registrant_id and p.get("registrantId") == registrant_id) or (wca_id and p.get("wcaId") == wca_id):
+            if (registrant_id and p.get("registrantId") == registrant_id) or (
+                wca_id and p.get("wcaId") == wca_id
+            ):
                 target_person = p
                 break
 
     # Build activity parent map
-    act_parent_map: Dict[int, int] = {}  # child_id -> parent_round_id
-    child_info_map: Dict[int, Dict[str, Any]] = {}
+    act_parent_map: dict[int, int] = {}  # child_id -> parent_round_id
+    child_info_map: dict[int, dict[str, Any]] = {}
 
     for r in venue.get("rooms", []):
         for act in r.get("activities", []):
@@ -407,8 +444,8 @@ async def fetch_wca_competition_schedule(
         for ass in target_person.get("assignments", []):
             ass_id = ass.get("activityId")
             code = ass.get("assignmentCode", "")
-            station = ass.get("stationNumber")
-            
+            ass.get("stationNumber")
+
             task_letter = ""
             if code == "competitor":
                 task_letter = "C"
@@ -429,21 +466,23 @@ async def fetch_wca_competition_schedule(
                     person_tasks[act_parent_map[ass_id]] = task_letter
 
     all_rooms = []
-    day_activities: Dict[str, List[Dict[str, Any]]] = {}
+    day_activities: dict[str, list[dict[str, Any]]] = {}
 
     for r in venue.get("rooms", []):
         r_id = r.get("id", 1)
         r_name = r.get("name", "Main Room")
         r_color = r.get("color") or "#2563EB"
-        all_rooms.append({
-            "id": r_id,
-            "name": r_name,
-            "color": r_color,
-        })
+        all_rooms.append(
+            {
+                "id": r_id,
+                "name": r_name,
+                "color": r_color,
+            }
+        )
 
         for act in r.get("activities", []):
             start_iso = act.get("startTime")
-            end_iso = act.get("endTime")
+            act.get("endTime")
             if not start_iso:
                 continue
 
@@ -461,7 +500,19 @@ async def fetch_wca_competition_schedule(
             act_id = act.get("id")
             act_name = act.get("name", "Event")
             act_code = act.get("activityCode", "")
-            is_break = any(b in act_name.lower() for b in ["lunch", "opening", "closing", "break", "awards", "dinner", "check-in", "registration"])
+            is_break = any(
+                b in act_name.lower()
+                for b in [
+                    "lunch",
+                    "opening",
+                    "closing",
+                    "break",
+                    "awards",
+                    "dinner",
+                    "check-in",
+                    "registration",
+                ]
+            )
 
             # Determine task for this activity from Groupifier assignments
             task_label = person_tasks.get(act_id, "")
@@ -496,22 +547,26 @@ async def fetch_wca_competition_schedule(
 
         clean_entries = []
         for a in acts:
-            clean_entries.append({
-                "time": a["time"],
-                "event": a["event"],
-                "code": a["code"],
-                "task": a.get("task", ""),
-                "isBreak": a["is_break"],
-                "roomId": a["room_id"],
-                "roomName": a["room_name"],
-                "roomColor": a["room_color"],
-            })
+            clean_entries.append(
+                {
+                    "time": a["time"],
+                    "event": a["event"],
+                    "code": a["code"],
+                    "task": a.get("task", ""),
+                    "isBreak": a["is_break"],
+                    "roomId": a["room_id"],
+                    "roomName": a["room_name"],
+                    "roomColor": a["room_color"],
+                }
+            )
 
-        days_list.append({
-            "date": d_date,
-            "dayName": day_name,
-            "entries": clean_entries,
-        })
+        days_list.append(
+            {
+                "date": d_date,
+                "dayName": day_name,
+                "entries": clean_entries,
+            }
+        )
 
     return {
         "competition_id": competition_id,
@@ -524,7 +579,7 @@ async def fetch_wca_competition_schedule(
 
 async def get_competition_registrations_categorized(
     competition_id: str,
-    token: Optional[str] = None,
+    token: str | None = None,
 ) -> WCARegistrationsCategorized:
     """
     Fetches registrations for a competition from WCA API and separates them into 3 categories:
@@ -533,7 +588,7 @@ async def get_competition_registrations_categorized(
     3. Cancelled (deleted / rejected / cancelled)
     """
     comp_name = competition_id
-    raw_records: List[Dict[str, Any]] = []
+    raw_records: list[dict[str, Any]] = []
 
     found_on_wca = False
 
@@ -548,9 +603,21 @@ async def get_competition_registrations_categorized(
                 if reg.get("isCompeting") is False:
                     continue
                 st = str(reg.get("status", "accepted")).lower()
-                if reg.get("deleted_at") is not None or st in ["deleted", "rejected", "cancelled", "canceled", "declined", "withdrawn", "d"]:
+                if reg.get("deleted_at") is not None or st in [
+                    "deleted",
+                    "rejected",
+                    "cancelled",
+                    "canceled",
+                    "declined",
+                    "withdrawn",
+                    "d",
+                ]:
                     st = "cancelled"
-                elif st in ["pending", "waitlist", "waiting_list"] or reg.get("is_waiting_list") or reg.get("waiting_list_position") is not None:
+                elif (
+                    st in ["pending", "waitlist", "waiting_list"]
+                    or reg.get("is_waiting_list")
+                    or reg.get("waiting_list_position") is not None
+                ):
                     st = "pending"
                 else:
                     st = "accepted"
@@ -562,23 +629,31 @@ async def get_competition_registrations_categorized(
             avatar_obj = p.get("avatar") or {}
             avatar_url = avatar_obj.get("url") or avatar_obj.get("thumbUrl")
 
-            raw_records.append({
-                "raw_name": name,
-                "wca_id": wca_id,
-                "country": country,
-                "status": st,
-                "registrant_id": reg_id,
-                "avatar_url": avatar_url,
-            })
+            raw_records.append(
+                {
+                    "raw_name": name,
+                    "wca_id": wca_id,
+                    "country": country,
+                    "status": st,
+                    "registrant_id": reg_id,
+                    "avatar_url": avatar_url,
+                }
+            )
 
     if not found_on_wca:
         try:
             async with httpx.AsyncClient(timeout=8.0) as client:
-                headers = {"Authorization": f"Bearer {token}"} if (token and not token.startswith("wca_demo_")) else {}
+                headers = (
+                    {"Authorization": f"Bearer {token}"}
+                    if (token and not token.startswith("wca_demo_"))
+                    else {}
+                )
 
                 # Fetch competition metadata (name)
                 try:
-                    comp_res = await client.get(f"{settings.WCA_API_URL}/competitions/{competition_id}", headers=headers)
+                    comp_res = await client.get(
+                        f"{settings.WCA_API_URL}/competitions/{competition_id}", headers=headers
+                    )
                     if comp_res.status_code == 200:
                         found_on_wca = True
                         comp_info = comp_res.json()
@@ -589,8 +664,12 @@ async def get_competition_registrations_categorized(
                 # Query WCIF endpoint (WCIF contains the complete, authoritative persons list with full names, WCA IDs, countries & registrations)
                 wcif_urls = []
                 if headers:
-                    wcif_urls.append((f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif", headers))
-                wcif_urls.append((f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif/public", {}))
+                    wcif_urls.append(
+                        (f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif", headers)
+                    )
+                wcif_urls.append(
+                    (f"{settings.WCA_API_URL}/competitions/{competition_id}/wcif/public", {})
+                )
 
                 for url, hdrs in wcif_urls:
                     wcif_res = await client.get(url, headers=hdrs)
@@ -610,9 +689,21 @@ async def get_competition_registrations_categorized(
                             continue
 
                         st = str(reg.get("status", "accepted")).lower()
-                        if reg.get("deleted_at") is not None or st in ["deleted", "rejected", "cancelled", "canceled", "declined", "withdrawn", "d"]:
+                        if reg.get("deleted_at") is not None or st in [
+                            "deleted",
+                            "rejected",
+                            "cancelled",
+                            "canceled",
+                            "declined",
+                            "withdrawn",
+                            "d",
+                        ]:
                             st = "cancelled"
-                        elif st in ["pending", "waitlist", "waiting_list"] or reg.get("is_waiting_list") or reg.get("waiting_list_position") is not None:
+                        elif (
+                            st in ["pending", "waitlist", "waiting_list"]
+                            or reg.get("is_waiting_list")
+                            or reg.get("waiting_list_position") is not None
+                        ):
                             st = "pending"
                         else:
                             st = "accepted"
@@ -624,14 +715,16 @@ async def get_competition_registrations_categorized(
                         avatar_obj = p.get("avatar") or {}
                         avatar_url = avatar_obj.get("url") or avatar_obj.get("thumbUrl")
 
-                        raw_records.append({
-                            "raw_name": name,
-                            "wca_id": wca_id,
-                            "country": country,
-                            "status": st,
-                            "registrant_id": reg_id,
-                            "avatar_url": avatar_url,
-                        })
+                        raw_records.append(
+                            {
+                                "raw_name": name,
+                                "wca_id": wca_id,
+                                "country": country,
+                                "status": st,
+                                "registrant_id": reg_id,
+                                "avatar_url": avatar_url,
+                            }
+                        )
                     # Found and parsed WCIF persons
                     break
         except Exception as e:
@@ -645,9 +738,9 @@ async def get_competition_registrations_categorized(
             comp_name = comp_obj["name"]
         raw_records = source_data
 
-    approved: List[WCARegistrationItem] = []
-    pending: List[WCARegistrationItem] = []
-    cancelled: List[WCARegistrationItem] = []
+    approved: list[WCARegistrationItem] = []
+    pending: list[WCARegistrationItem] = []
+    cancelled: list[WCARegistrationItem] = []
 
     for idx, item in enumerate(raw_records, 1):
         raw_name = item.get("raw_name", "")

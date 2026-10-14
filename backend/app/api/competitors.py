@@ -1,22 +1,22 @@
 import asyncio
 import logging
-from typing import List, Optional
+
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
-from sqlalchemy import select, delete, func
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.competitor import Competitor
 from app.models.role import Role
 from app.schemas.competitor import (
-    CompetitorOut,
-    CSVUploadResponse,
     CompetitorAvatarUpdate,
     CompetitorBatchAvatarsResponse,
+    CompetitorOut,
+    CSVUploadResponse,
 )
 from app.schemas.wca import ManualCompetitorCreate
-from app.services.csv_parser import parse_wca_csv, parse_wca_name, resolve_country_iso2
+from app.services.csv_parser import parse_wca_csv, resolve_country_iso2
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +28,20 @@ async def upload_wca_csv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    if not file.filename.lower().endswith(".csv") and file.content_type not in ["text/csv", "application/vnd.ms-excel", "text/plain"]:
+    if not file.filename.lower().endswith(".csv") and file.content_type not in [
+        "text/csv",
+        "application/vnd.ms-excel",
+        "text/plain",
+    ]:
         raise HTTPException(status_code=400, detail="Uploaded file must be a CSV file")
 
     content = await file.read()
     records = parse_wca_csv(content)
 
     if not records:
-        raise HTTPException(status_code=400, detail="No valid participant records found in CSV file")
+        raise HTTPException(
+            status_code=400, detail="No valid participant records found in CSV file"
+        )
 
     result = await db.execute(select(Role).where(Role.is_default == True))  # noqa: E712
     default_role = result.scalars().first()
@@ -69,7 +75,7 @@ async def upload_wca_csv(
     )
 
 
-@router.get("", response_model=List[CompetitorOut])
+@router.get("", response_model=list[CompetitorOut])
 async def list_competitors(
     db: AsyncSession = Depends(get_db),
 ):
@@ -190,6 +196,7 @@ async def fetch_wca_avatars(
     avatars_found_count = 0
 
     async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+
         async def fetch_one(comp: Competitor):
             nonlocal avatars_found_count
             wca_id = comp.wca_id.strip().upper()
@@ -225,4 +232,3 @@ async def fetch_wca_avatars(
         avatars_found=avatars_found_count,
         updated=updated_map,
     )
-

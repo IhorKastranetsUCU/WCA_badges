@@ -1,4 +1,3 @@
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +10,7 @@ from app.schemas.role import RoleAssignRequest, RoleCreate, RoleOut, RoleUpdate
 router = APIRouter(prefix="/roles", tags=["roles"])
 
 
-@router.get("", response_model=List[RoleOut])
+@router.get("", response_model=list[RoleOut])
 async def list_roles(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Role).order_by(Role.is_default.desc(), Role.created_at.asc()))
     roles = result.scalars().all()

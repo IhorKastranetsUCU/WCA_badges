@@ -1,18 +1,18 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import select, text
 
+from app.api.auth import router as auth_router
 from app.api.badges import router as badges_router
 from app.api.competitors import router as competitors_router
 from app.api.roles import router as roles_router
 from app.api.wca import router as wca_router
-from app.api.auth import router as auth_router
-from sqlalchemy import select, text
 from app.core.config import settings
-from app.core.database import AsyncSessionLocal, engine, Base
-from app.models.role import Role
+from app.core.database import AsyncSessionLocal, Base, engine
 from app.models.badge_template import BadgeTemplate
+from app.models.role import Role
 
 
 @asynccontextmanager
@@ -21,7 +21,9 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             try:
-                await conn.execute(text("ALTER TABLE competitors ADD COLUMN IF NOT EXISTS avatar_url TEXT;"))
+                await conn.execute(
+                    text("ALTER TABLE competitors ADD COLUMN IF NOT EXISTS avatar_url TEXT;")
+                )
             except Exception:
                 pass
 
@@ -49,13 +51,16 @@ async def lifespan(app: FastAPI):
                 )
                 session.add(default_role)
 
-            tpl_res = await session.execute(select(BadgeTemplate).where(BadgeTemplate.id == "current"))
+            tpl_res = await session.execute(
+                select(BadgeTemplate).where(BadgeTemplate.id == "current")
+            )
             if not tpl_res.scalars().first():
                 session.add(BadgeTemplate(id="current", name="Default Template"))
 
             await session.commit()
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).warning("Startup DB initialization note: %s", e)
 
     yield

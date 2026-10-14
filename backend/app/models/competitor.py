@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
@@ -19,6 +20,6 @@ class Competitor(Base):
     country_name = Column(String(100), nullable=True)
     role_id = Column(String(64), ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
     avatar_url = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     role = relationship("Role", back_populates="competitors", lazy="selectin")

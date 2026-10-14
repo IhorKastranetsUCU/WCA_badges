@@ -55,7 +55,9 @@ async def export_badges_pdf(
 ):
     tpl = await get_or_create_default_template(db)
 
-    dims = payload.template_override.get("dimensions") if payload.template_override else tpl.dimensions
+    dims = (
+        payload.template_override.get("dimensions") if payload.template_override else tpl.dimensions
+    )
     sides = payload.template_override.get("sides") if payload.template_override else tpl.sides
 
     comp_dicts = []
@@ -66,19 +68,23 @@ async def export_badges_pdf(
         competitors = comp_res.scalars().all()
 
         if not competitors:
-            raise HTTPException(status_code=400, detail="No competitors provided or found to generate badges")
+            raise HTTPException(
+                status_code=400, detail="No competitors provided or found to generate badges"
+            )
         for c in competitors:
-            comp_dicts.append({
-                "csv_index": c.csv_index,
-                "name_latin": c.name_latin,
-                "name_local": c.name_local,
-                "name_raw": c.name_raw,
-                "wca_id": c.wca_id,
-                "country_iso2": c.country_iso2,
-                "country_name": c.country_name,
-                "role_id": c.role_id,
-                "avatar_url": c.avatar_url,
-            })
+            comp_dicts.append(
+                {
+                    "csv_index": c.csv_index,
+                    "name_latin": c.name_latin,
+                    "name_local": c.name_local,
+                    "name_raw": c.name_raw,
+                    "wca_id": c.wca_id,
+                    "country_iso2": c.country_iso2,
+                    "country_name": c.country_name,
+                    "role_id": c.role_id,
+                    "avatar_url": c.avatar_url,
+                }
+            )
 
     roles_map = {}
     if payload.roles and len(payload.roles) > 0:

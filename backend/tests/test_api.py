@@ -1,6 +1,10 @@
 import pytest
-from app.services.csv_parser import parse_wca_name, resolve_country_iso2, parse_wca_csv
-from app.services.wca_api import get_competition_registrations_categorized, get_competitions_for_user, DEMO_PROFILES
+
+from app.services.csv_parser import parse_wca_csv, parse_wca_name, resolve_country_iso2
+from app.services.wca_api import (
+    get_competition_registrations_categorized,
+    get_competitions_for_user,
+)
 
 
 def test_parse_wca_name_split():
@@ -27,7 +31,7 @@ def test_parse_wca_csv():
         "Petro Petrenko (Петро Петренко),2015BOGD01,Ukraine,Accepted\n"
         "John Doe,,United States,Accepted\n"
         "Cancelled Person,,Ukraine,Deleted\n"
-    ).encode("utf-8")
+    ).encode()
     records = parse_wca_csv(csv_sample)
     assert len(records) == 2
     assert records[0]["name_latin"] == "Petro Petrenko"
@@ -40,7 +44,10 @@ def test_parse_wca_csv():
 @pytest.mark.asyncio
 async def test_wca_competitions_listing():
     from app.schemas.wca import WCAProfile
-    profile = WCAProfile(id=1, name="Test Delegate", country_iso2="UA", is_delegate=True, is_organizer=True)
+
+    profile = WCAProfile(
+        id=1, name="Test Delegate", country_iso2="UA", is_delegate=True, is_organizer=True
+    )
     comps = await get_competitions_for_user(profile, None)
     assert isinstance(comps, list)
 
@@ -48,6 +55,7 @@ async def test_wca_competitions_listing():
 @pytest.mark.asyncio
 async def test_wca_registrations_categorized():
     from app.services.wca_api import _WCIF_CACHE
+
     _WCIF_CACHE["TestComp2026"] = {
         "id": "TestComp2026",
         "name": "Test Competition 2026",
@@ -119,34 +127,69 @@ def test_render_badges_pdf_multiple_competitors():
                     "type": "name",
                     "enabled": True,
                     "name_display": "both",
-                    "position": {"x_mm": 5.0, "y_mm": 22.0, "width_mm": 90.0, "height_mm": 14.0, "z_index": 2},
-                    "style": {"font_size": 18, "text_align": "center", "has_background": True, "background_color": "#EEEEEE", "border_radius": 2.0},
+                    "position": {
+                        "x_mm": 5.0,
+                        "y_mm": 22.0,
+                        "width_mm": 90.0,
+                        "height_mm": 14.0,
+                        "z_index": 2,
+                    },
+                    "style": {
+                        "font_size": 18,
+                        "text_align": "center",
+                        "has_background": True,
+                        "background_color": "#EEEEEE",
+                        "border_radius": 2.0,
+                    },
                 },
                 {
                     "type": "wca_id",
                     "enabled": True,
                     "format_mode": "prefix_label",
-                    "position": {"x_mm": 50.0, "y_mm": 38.0, "width_mm": 40.0, "height_mm": 6.0, "z_index": 3},
+                    "position": {
+                        "x_mm": 50.0,
+                        "y_mm": 38.0,
+                        "width_mm": 40.0,
+                        "height_mm": 6.0,
+                        "z_index": 3,
+                    },
                     "style": {"font_size": 11, "text_align": "right"},
                 },
                 {
                     "type": "role",
                     "enabled": True,
-                    "position": {"x_mm": 20.0, "y_mm": 52.0, "width_mm": 60.0, "height_mm": 9.0, "z_index": 4},
+                    "position": {
+                        "x_mm": 20.0,
+                        "y_mm": 52.0,
+                        "width_mm": 60.0,
+                        "height_mm": 9.0,
+                        "z_index": 4,
+                    },
                 },
                 {
                     "type": "flag",
                     "enabled": True,
-                    "position": {"x_mm": 42.0, "y_mm": 5.0, "width_mm": 16.0, "height_mm": 11.0, "z_index": 1},
+                    "position": {
+                        "x_mm": 42.0,
+                        "y_mm": 5.0,
+                        "width_mm": 16.0,
+                        "height_mm": 11.0,
+                        "z_index": 1,
+                    },
                 },
             ]
         }
     }
 
     # Testing Single paper size: 1 badge per page = 54 pages
-    pdf_bytes_single = render_badges_pdf(sample_50, roles, dims, sides, "front", paper_size="Single")
+    pdf_bytes_single = render_badges_pdf(
+        sample_50, roles, dims, sides, "front", paper_size="Single"
+    )
     assert len(pdf_bytes_single) > 1000
-    assert pdf_bytes_single.count(b"/Type /Page\n") == 54 or pdf_bytes_single.count(b"/Type /Page") >= 54
+    assert (
+        pdf_bytes_single.count(b"/Type /Page\n") == 54
+        or pdf_bytes_single.count(b"/Type /Page") >= 54
+    )
 
     # Testing A4 sheet layout: 8 badges per sheet = 7 sheets
     pdf_bytes_a4 = render_badges_pdf(sample_50, roles, dims, sides, "front", paper_size="A4")
@@ -156,13 +199,15 @@ def test_render_badges_pdf_multiple_competitors():
 
 @pytest.mark.asyncio
 async def test_delete_competitor_endpoint():
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from app.main import app
-    from app.services.csv_parser import parse_wca_csv
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # Create a competitor via manual
-        res = await ac.post("/api/competitors/manual", json={"name_latin": "Delete Me", "country_iso2": "UA"})
+        res = await ac.post(
+            "/api/competitors/manual", json={"name_latin": "Delete Me", "country_iso2": "UA"}
+        )
         assert res.status_code == 201
         comp_id = res.json()["id"]
 
@@ -178,7 +223,8 @@ async def test_delete_competitor_endpoint():
 
 @pytest.mark.asyncio
 async def test_google_auth_and_account_linking():
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from app.main import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -193,7 +239,11 @@ async def test_google_auth_and_account_linking():
         # 2. Simulate Google callback with linked WCA ID
         cb_res = await ac.post(
             "/api/auth/google/callback",
-            json={"code": "sample_code_123", "redirect_uri": "http://localhost:5173/", "wca_id": "2009ZEMD01"},
+            json={
+                "code": "sample_code_123",
+                "redirect_uri": "http://localhost:5173/",
+                "wca_id": "2009ZEMD01",
+            },
         )
         assert cb_res.status_code == 200
         auth_data = cb_res.json()
@@ -210,5 +260,3 @@ async def test_google_auth_and_account_linking():
         linked_data = link_res.json()
         assert linked_data["profile"]["wca_id"] == "2009ZEMD01"
         assert linked_data["profile"]["auth_provider"] == "google"
-
-

@@ -1,8 +1,7 @@
 import csv
 import io
 import re
-from typing import Any, Dict, List, Tuple
-
+from typing import Any
 
 COUNTRY_ISO_MAP = {
     "ukraine": "UA",
@@ -38,7 +37,7 @@ COUNTRY_ISO_MAP = {
 }
 
 
-def parse_wca_name(raw_name: str) -> Tuple[str, str | None]:
+def parse_wca_name(raw_name: str) -> tuple[str, str | None]:
     cleaned = raw_name.strip()
     match = re.search(r"^(.*?)\s*\((.*?)\)$", cleaned)
     if match:
@@ -48,7 +47,7 @@ def parse_wca_name(raw_name: str) -> Tuple[str, str | None]:
     return cleaned, None
 
 
-def resolve_country_iso2(country_str: str) -> Tuple[str, str]:
+def resolve_country_iso2(country_str: str) -> tuple[str, str]:
     if not country_str:
         return ("UA", "Ukraine")
     normalized = country_str.strip()
@@ -60,7 +59,7 @@ def resolve_country_iso2(country_str: str) -> Tuple[str, str]:
     return (normalized[:2].upper(), normalized)
 
 
-def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
+def parse_wca_csv(content_bytes: bytes) -> list[dict[str, Any]]:
     try:
         text = content_bytes.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -91,7 +90,17 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
             col_map["country"] = idx
         elif "role" in col or "role(s)" in col:
             col_map["role"] = idx
-        elif any(id_term == col for id_term in ["registrant id", "registrant_id", "registrantid", "comp id", "comp_id", "bib"]) or (col == "id" and "registrant_id" not in col_map):
+        elif any(
+            id_term == col
+            for id_term in [
+                "registrant id",
+                "registrant_id",
+                "registrantid",
+                "comp id",
+                "comp_id",
+                "bib",
+            ]
+        ) or (col == "id" and "registrant_id" not in col_map):
             col_map["registrant_id"] = idx
 
         if any(term in col for term in ["status", "registration", "competing", "state", "attend"]):
@@ -101,9 +110,22 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
         col_map["name"] = 0
 
     EXCLUDED_STATUSES = {
-        "d", "del", "deleted", "rejected", "cancelled", "canceled",
-        "withdrawn", "declined", "dropped", "false", "no", "0",
-        "unpaid", "not competing", "inactive", "removed"
+        "d",
+        "del",
+        "deleted",
+        "rejected",
+        "cancelled",
+        "canceled",
+        "withdrawn",
+        "declined",
+        "dropped",
+        "false",
+        "no",
+        "0",
+        "unpaid",
+        "not competing",
+        "inactive",
+        "removed",
     }
 
     parsed_competitors = []
@@ -113,7 +135,9 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
         if not row or not any(row):
             continue
 
-        raw_name = row[col_map["name"]].strip() if "name" in col_map and col_map["name"] < len(row) else ""
+        raw_name = (
+            row[col_map["name"]].strip() if "name" in col_map and col_map["name"] < len(row) else ""
+        )
         if not raw_name:
             continue
 
@@ -148,15 +172,17 @@ def parse_wca_csv(content_bytes: bytes) -> List[Dict[str, Any]]:
 
         final_csv_index = reg_id_val if reg_id_val is not None else seq_index
 
-        parsed_competitors.append({
-            "csv_index": final_csv_index,
-            "name_latin": latin,
-            "name_local": local,
-            "name_raw": raw_name,
-            "wca_id": wca_id,
-            "country_iso2": iso2,
-            "country_name": full_country,
-        })
+        parsed_competitors.append(
+            {
+                "csv_index": final_csv_index,
+                "name_latin": latin,
+                "name_local": local,
+                "name_raw": raw_name,
+                "wca_id": wca_id,
+                "country_iso2": iso2,
+                "country_name": full_country,
+            }
+        )
         seq_index += 1
 
     return parsed_competitors

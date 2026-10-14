@@ -1,6 +1,7 @@
 import uuid
-from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, JSON, String
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, String
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -29,6 +30,6 @@ class Role(Base):
             "opacity": 1.0,
         },
     )
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     competitors = relationship("Competitor", back_populates="role", lazy="selectin")

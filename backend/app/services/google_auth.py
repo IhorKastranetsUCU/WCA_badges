@@ -3,9 +3,9 @@ import csv
 import json
 import logging
 import os
-import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urlencode
+
 import httpx
 from fastapi import HTTPException
 
@@ -14,7 +14,6 @@ from app.schemas.wca import WCACompetition, WCAProfile
 from app.services.wca_api import (
     fetch_wca_me_profile,
     get_competitions_for_user,
-    get_wca_competition_info,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,6 +23,7 @@ LINKS_FILE = (
     if os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
     else os.path.join(os.path.dirname(__file__), "google_wca_links.json")
 )
+
 
 def get_effective_google_secret(client_id: str) -> str:
     return os.environ.get("GOOGLE_CLIENT_SECRET", "") or settings.GOOGLE_CLIENT_SECRET
@@ -50,7 +50,7 @@ def encode_profile_token(profile: WCAProfile) -> str:
     return f"gtok_{b64}"
 
 
-def decode_profile_token(token: str) -> Optional[WCAProfile]:
+def decode_profile_token(token: str) -> WCAProfile | None:
     """
     Reconstructs a WCAProfile from a self-contained gtok_ token.
     """
@@ -67,17 +67,17 @@ def decode_profile_token(token: str) -> Optional[WCAProfile]:
         return None
 
 
-def load_stored_links() -> Dict[str, str]:
+def load_stored_links() -> dict[str, str]:
     if os.path.exists(LINKS_FILE):
         try:
-            with open(LINKS_FILE, "r", encoding="utf-8") as f:
+            with open(LINKS_FILE, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.warning(f"Failed to read links file: {e}")
     return {}
 
 
-def save_stored_links(links: Dict[str, str]):
+def save_stored_links(links: dict[str, str]):
     try:
         with open(LINKS_FILE, "w", encoding="utf-8") as f:
             json.dump(links, f, indent=2)
@@ -85,11 +85,11 @@ def save_stored_links(links: Dict[str, str]):
         logger.warning(f"Could not persist links: {e}")
 
 
-GOOGLE_WCA_LINKS: Dict[str, str] = load_stored_links()
-GOOGLE_PROFILE_CACHE: Dict[str, WCAProfile] = {}
+GOOGLE_WCA_LINKS: dict[str, str] = load_stored_links()
+GOOGLE_PROFILE_CACHE: dict[str, WCAProfile] = {}
 
 
-def get_google_auth_urls(redirect_uri: Optional[str] = None) -> Dict[str, Any]:
+def get_google_auth_urls(redirect_uri: str | None = None) -> dict[str, Any]:
     """
     Returns both direct Google OAuth authorization URL and AWS Cognito Hosted UI URL.
     Includes state=google to enable reliable callback detection across all browsers.
@@ -109,7 +109,9 @@ def get_google_auth_urls(redirect_uri: Optional[str] = None) -> Dict[str, Any]:
     google_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(google_params)}"
 
     # AWS Cognito Hosted UI URL with Google IdP pre-selected
-    cognito_domain = f"https://{settings.COGNITO_DOMAIN_PREFIX}.auth.{settings.COGNITO_REGION}.amazoncognito.com"
+    cognito_domain = (
+        f"https://{settings.COGNITO_DOMAIN_PREFIX}.auth.{settings.COGNITO_REGION}.amazoncognito.com"
+    )
     cognito_params = {
         "client_id": settings.COGNITO_USER_POOL_CLIENT_ID,
         "response_type": "code",
@@ -130,8 +132,8 @@ def get_google_auth_urls(redirect_uri: Optional[str] = None) -> Dict[str, Any]:
 
 
 async def exchange_google_or_cognito_code(
-    code: str, redirect_uri: Optional[str] = None
-) -> Dict[str, Any]:
+    code: str, redirect_uri: str | None = None
+) -> dict[str, Any]:
     """
     Exchanges an authorization code with either Google OAuth or Cognito Token endpoint.
     """
@@ -158,9 +160,7 @@ async def exchange_google_or_cognito_code(
     for provider in exchange_order:
         if provider == "cognito":
             try:
-                cognito_token_url = (
-                    f"https://{settings.COGNITO_DOMAIN_PREFIX}.auth.{settings.COGNITO_REGION}.amazoncognito.com/oauth2/token"
-                )
+                cognito_token_url = f"https://{settings.COGNITO_DOMAIN_PREFIX}.auth.{settings.COGNITO_REGION}.amazoncognito.com/oauth2/token"
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     c_res = await client.post(
                         cognito_token_url,
@@ -186,7 +186,9 @@ async def exchange_google_or_cognito_code(
                             "source": "cognito",
                         }
                     else:
-                        logger.warning("Cognito exchange returned status %s: %s", c_res.status_code, c_res.text)
+                        logger.warning(
+                            "Cognito exchange returned status %s: %s", c_res.status_code, c_res.text
+                        )
             except Exception as e:
                 logger.warning("Cognito exchange error: %s", e)
 
@@ -225,9 +227,17 @@ async def exchange_google_or_cognito_code(
                                     "source": "google_direct",
                                 }
                             else:
-                                logger.warning("Google userinfo fetch failed: %s %s", u_res.status_code, u_res.text)
+                                logger.warning(
+                                    "Google userinfo fetch failed: %s %s",
+                                    u_res.status_code,
+                                    u_res.text,
+                                )
                         else:
-                            logger.warning("Google token exchange returned status %s: %s", g_res.status_code, g_res.text)
+                            logger.warning(
+                                "Google token exchange returned status %s: %s",
+                                g_res.status_code,
+                                g_res.text,
+                            )
                 except Exception as e:
                     logger.warning("Google direct exchange error: %s", e)
 
@@ -238,7 +248,7 @@ async def exchange_google_or_cognito_code(
     )
 
 
-async def auto_discover_wca_id(google_user: Dict[str, Any]) -> Optional[str]:
+async def auto_discover_wca_id(google_user: dict[str, Any]) -> str | None:
     """
     Automatically discovers and resolves the user's WCA ID using:
     1. Persistent links cache
@@ -264,7 +274,7 @@ async def auto_discover_wca_id(google_user: Dict[str, Any]) -> Optional[str]:
     for csv_path in csv_candidates:
         if os.path.exists(csv_path):
             try:
-                with open(csv_path, mode="r", encoding="utf-8") as f:
+                with open(csv_path, encoding="utf-8") as f:
                     reader = csv.DictReader(f)
                     for row in reader:
                         r_email = (row.get("Email") or "").strip().lower()
@@ -276,7 +286,9 @@ async def auto_discover_wca_id(google_user: Dict[str, Any]) -> Optional[str]:
 
                         # Exact match on email
                         if email and r_email and r_email == email:
-                            logger.info("Discovered WCA ID %s by email match in %s", r_wca_id, csv_path)
+                            logger.info(
+                                "Discovered WCA ID %s by email match in %s", r_wca_id, csv_path
+                            )
                             GOOGLE_WCA_LINKS[email] = r_wca_id
                             save_stored_links(GOOGLE_WCA_LINKS)
                             return r_wca_id
@@ -285,7 +297,9 @@ async def auto_discover_wca_id(google_user: Dict[str, Any]) -> Optional[str]:
                         if name and len(name) >= 5:
                             clean_name = name.lower()
                             if clean_name == r_name or clean_name in r_name:
-                                logger.info("Discovered WCA ID %s by name match in %s", r_wca_id, csv_path)
+                                logger.info(
+                                    "Discovered WCA ID %s by name match in %s", r_wca_id, csv_path
+                                )
                                 if email:
                                     GOOGLE_WCA_LINKS[email] = r_wca_id
                                     save_stored_links(GOOGLE_WCA_LINKS)
@@ -309,7 +323,11 @@ async def auto_discover_wca_id(google_user: Dict[str, Any]) -> Optional[str]:
                         candidate_wca_id = u.get("wca_id")
                         candidate_name = (u.get("name") or "").lower()
                         if candidate_wca_id and candidate_name == name.lower():
-                            logger.info("Discovered WCA ID %s via WCA users search API for %s", candidate_wca_id, name)
+                            logger.info(
+                                "Discovered WCA ID %s via WCA users search API for %s",
+                                candidate_wca_id,
+                                name,
+                            )
                             if email:
                                 GOOGLE_WCA_LINKS[email] = candidate_wca_id
                                 save_stored_links(GOOGLE_WCA_LINKS)
@@ -321,8 +339,8 @@ async def auto_discover_wca_id(google_user: Dict[str, Any]) -> Optional[str]:
 
 
 async def resolve_wca_profile_for_google_user(
-    google_user: Dict[str, Any],
-    requested_wca_id: Optional[str] = None,
+    google_user: dict[str, Any],
+    requested_wca_id: str | None = None,
 ) -> WCAProfile:
     """
     Constructs a WCAProfile that preserves the user's authentic Google identity
@@ -376,13 +394,11 @@ async def resolve_wca_profile_for_google_user(
     return unlinked
 
 
-async def get_competitions_for_google_user(
-    profile: WCAProfile, token: str
-) -> List[WCACompetition]:
+async def get_competitions_for_google_user(profile: WCAProfile, token: str) -> list[WCACompetition]:
     """
     Fetches competitions for the Google user carrying a WCA profile.
     """
-    comps: List[WCACompetition] = []
+    comps: list[WCACompetition] = []
     if profile.wca_id:
         comps = await get_competitions_for_user(profile, None)
     return comps

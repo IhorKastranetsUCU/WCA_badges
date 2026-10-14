@@ -5,14 +5,17 @@ Revises: 002_add_users_table
 Create Date: 2026-10-14 20:25:00.000000
 
 """
-from typing import Sequence, Union
-from alembic import op
+
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
+
 revision: str = "003_add_meetings_table"
-down_revision: Union[str, None] = "002_add_users_table"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "002_add_users_table"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

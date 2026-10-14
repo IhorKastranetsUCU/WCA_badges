@@ -1,6 +1,8 @@
 import uuid
-from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, String, Text, JSON
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Column, DateTime, String, Text
+
 from app.core.database import Base
 
 
@@ -23,10 +25,10 @@ class User(Base):
     wca_profile_data = Column(JSON, nullable=True)
     wca_access_token = Column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )

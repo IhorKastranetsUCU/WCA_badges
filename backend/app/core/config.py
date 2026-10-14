@@ -1,5 +1,5 @@
 import os
-from typing import List
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,7 +11,9 @@ class Settings(BaseSettings):
         if os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
         else "postgresql+asyncpg://spry_user:spry_password@postgres:5432/spry_badges"
     )
-    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,https://v0-wcabadgegenerator3.vercel.app,*"
+    CORS_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,https://v0-wcabadgegenerator3.vercel.app,*"
+    )
 
     # Official WCA OAuth Application Credentials
     WCA_CLIENT_ID: str = "6AZttc60ofQv3kaUSGgdS0lkgjh06fcsZtjgz32oFDk"
@@ -29,7 +31,7 @@ class Settings(BaseSettings):
     COGNITO_REGION: str = "us-east-1"
 
     @property
-    def cors_origin_list(self) -> List[str]:
+    def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     @property

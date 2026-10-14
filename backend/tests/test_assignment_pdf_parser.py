@@ -1,7 +1,8 @@
 import io
-import pytest
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+
 from app.services.assignment_pdf_parser import parse_competitor_cards_pdf
 
 

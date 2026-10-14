@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -32,25 +33,27 @@ class ElementStyle(BaseModel):
 
 class BadgeElement(BaseModel):
     id: str
-    type: Literal["name", "wca_id", "flag", "competition_id", "role", "avatar", "qr_code", "schedule"]
+    type: Literal[
+        "name", "wca_id", "flag", "competition_id", "role", "avatar", "qr_code", "schedule"
+    ]
     enabled: bool = True
     position: ElementPosition
-    style: Optional[ElementStyle] = None
-    name_display: Optional[Literal["latin_only", "local_only", "both"]] = "latin_only"
-    format_mode: Optional[Literal["raw", "prefix_label", "custom"]] = "prefix_label"
-    format_prefix: Optional[str] = ""
-    format_suffix: Optional[str] = ""
-    opacity: Optional[float] = 1.0
-    qr_content: Optional[str] = None
-    qr_label: Optional[str] = None
-    qr_label_position: Optional[Literal["top", "bottom", "none"]] = "bottom"
-    qr_color: Optional[str] = "#000000"
-    qr_bg_color: Optional[str] = "#FFFFFF"
-    qr_font_family: Optional[str] = "Inter"
-    qr_font_size: Optional[int] = 10
-    qr_text_color: Optional[str] = "#1E293B"
-    schedule_title: Optional[str] = None
-    schedule_data: Optional[Any] = None
+    style: ElementStyle | None = None
+    name_display: Literal["latin_only", "local_only", "both"] | None = "latin_only"
+    format_mode: Literal["raw", "prefix_label", "custom"] | None = "prefix_label"
+    format_prefix: str | None = ""
+    format_suffix: str | None = ""
+    opacity: float | None = 1.0
+    qr_content: str | None = None
+    qr_label: str | None = None
+    qr_label_position: Literal["top", "bottom", "none"] | None = "bottom"
+    qr_color: str | None = "#000000"
+    qr_bg_color: str | None = "#FFFFFF"
+    qr_font_family: str | None = "Inter"
+    qr_font_size: int | None = 10
+    qr_text_color: str | None = "#1E293B"
+    schedule_title: str | None = None
+    schedule_data: Any | None = None
 
 
 class BadgeDimensions(BaseModel):
@@ -60,8 +63,8 @@ class BadgeDimensions(BaseModel):
 
 
 class BadgeSideConfig(BaseModel):
-    background_url: Optional[str] = None
-    elements: List[BadgeElement] = Field(default_factory=list)
+    background_url: str | None = None
+    elements: list[BadgeElement] = Field(default_factory=list)
 
 
 class BadgeSides(BaseModel):
@@ -82,18 +85,18 @@ class BadgeTemplateOut(BaseModel):
 
 
 class BadgeTemplateUpdate(BaseModel):
-    name: Optional[str] = None
-    dimensions: Optional[BadgeDimensions] = None
-    sides: Optional[BadgeSides] = None
+    name: str | None = None
+    dimensions: BadgeDimensions | None = None
+    sides: BadgeSides | None = None
 
 
 class ExportPDFRequest(BaseModel):
-    template_id: Optional[str] = "current"
+    template_id: str | None = "current"
     side: Literal["front", "back", "both"] = "front"
     paper_size: Literal["A4", "A5", "Letter", "Legal", "Single"] = "A4"
     parity: Literal["front_even", "front_odd"] = "front_even"
     crop_marks: bool = True
-    template_override: Optional[Dict[str, Any]] = None
-    competitors: Optional[List[Dict[str, Any]]] = None
-    roles: Optional[List[Dict[str, Any]]] = None
-    schedule_data: Optional[Dict[str, Any]] = None
+    template_override: dict[str, Any] | None = None
+    competitors: list[dict[str, Any]] | None = None
+    roles: list[dict[str, Any]] | None = None
+    schedule_data: dict[str, Any] | None = None

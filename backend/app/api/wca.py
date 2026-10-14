@@ -1,4 +1,7 @@
-from typing import Any, Dict, List, Optional
+import logging
+import uuid
+from typing import Any
+
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.competitor import Competitor
 from app.models.role import Role
+from app.models.user import User
 from app.schemas.competitor import CompetitorOut
 from app.schemas.wca import (
     WCAAuthResponse,
@@ -18,7 +22,6 @@ from app.schemas.wca import (
     WCATokenLoginRequest,
 )
 from app.services.wca_api import (
-    DEMO_PROFILES,
     exchange_wca_code,
     fetch_wca_competition_schedule,
     fetch_wca_me_profile,
@@ -28,21 +31,19 @@ from app.services.wca_api import (
     get_wca_competition_info,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/wca", tags=["wca"])
 
 
 @router.get("/oauth/url", response_model=WCAOAuthUrlResponse)
-async def get_oauth_url(redirect_uri: Optional[str] = None):
+async def get_oauth_url(redirect_uri: str | None = None):
     """
     Returns the WCA OAuth2 authorization URL to start user login.
     Supports dynamic redirect_uri for local development (e.g. http://localhost:5173/).
     """
     data = get_wca_authorization_url(redirect_uri)
     return WCAOAuthUrlResponse(**data)
-
-
-import uuid
-from app.models.user import User
 
 
 @router.post("/oauth/callback", response_model=WCAAuthResponse)
@@ -64,7 +65,9 @@ async def handle_oauth_callback(
     try:
         if profile.email or profile.wca_id:
             lookup_email = (profile.email or f"{profile.wca_id.lower()}@wca.local").strip().lower()
-            stmt = select(User).where((User.email == lookup_email) | (User.wca_id == profile.wca_id))
+            stmt = select(User).where(
+                (User.email == lookup_email) | (User.wca_id == profile.wca_id)
+            )
             res = await db.execute(stmt)
             db_user = res.scalars().first()
             if not db_user:
@@ -94,6 +97,7 @@ async def handle_oauth_callback(
             await db.commit()
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).warning("Could not persist WCA user in DB: %s", e)
 
     return WCAAuthResponse(
@@ -124,7 +128,9 @@ async def login_with_token_or_demo(
     try:
         if profile.email or profile.wca_id:
             lookup_email = (profile.email or f"{profile.wca_id.lower()}@wca.local").strip().lower()
-            stmt = select(User).where((User.email == lookup_email) | (User.wca_id == profile.wca_id))
+            stmt = select(User).where(
+                (User.email == lookup_email) | (User.wca_id == profile.wca_id)
+            )
             res = await db.execute(stmt)
             db_user = res.scalars().first()
             if not db_user:
@@ -154,6 +160,7 @@ async def login_with_token_or_demo(
             await db.commit()
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).warning("Could not persist WCA token user in DB: %s", e)
 
     return WCAAuthResponse(
@@ -166,7 +173,7 @@ async def login_with_token_or_demo(
 
 
 @router.get("/me", response_model=WCAProfile)
-async def get_current_profile(authorization: Optional[str] = Header(None)):
+async def get_current_profile(authorization: str | None = Header(None)):
     """
     Returns the currently connected WCA profile.
     """
@@ -176,9 +183,9 @@ async def get_current_profile(authorization: Optional[str] = Header(None)):
     return await fetch_wca_me_profile(token)
 
 
-@router.get("/competitions", response_model=List[WCACompetition])
+@router.get("/competitions", response_model=list[WCACompetition])
 async def list_user_competitions(
-    authorization: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
 ):
     """
     Lists competitions where the connected user holds a role (Delegate or Organizer).
@@ -198,7 +205,7 @@ async def list_user_competitions(
 @router.get("/competitions/{competition_id}/schedule")
 async def get_competition_schedule(
     competition_id: str,
-    authorization: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
 ):
     """
     Fetches official competition schedule directly from WCA API, converted to venue timezone.
@@ -207,20 +214,22 @@ async def get_competition_schedule(
     return await fetch_wca_competition_schedule(competition_id, token)
 
 
-@router.get("/competitions/{competition_id}/info", response_model=Optional[WCACompetition])
+@router.get("/competitions/{competition_id}/info", response_model=WCACompetition | None)
 async def get_competition_info(competition_id: str):
     """
     Fetches public metadata for any WCA competition by ID.
     """
     info = await get_wca_competition_info(competition_id)
     if not info:
-        raise HTTPException(status_code=404, detail=f"Competition '{competition_id}' not found on WCA")
+        raise HTTPException(
+            status_code=404, detail=f"Competition '{competition_id}' not found on WCA"
+        )
     return info
 
 
 @router.post("/wcif/upload")
 async def upload_groupifier_wcif(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -229,6 +238,7 @@ async def upload_groupifier_wcif(
     """
     comp_id = payload.get("id") or "GroupifierCompetition"
     from app.services.wca_api import _WCIF_CACHE, parse_wca_name, resolve_country_iso2
+
     _WCIF_CACHE[comp_id] = payload
 
     res = await db.execute(select(Role).where(Role.is_default == True))  # noqa: E712
@@ -244,7 +254,15 @@ async def upload_groupifier_wcif(
             if reg.get("isCompeting") is False:
                 continue
             st = str(reg.get("status", "accepted")).lower()
-            if reg.get("deleted_at") is not None or st in ["deleted", "rejected", "cancelled", "canceled", "declined", "withdrawn", "d"]:
+            if reg.get("deleted_at") is not None or st in [
+                "deleted",
+                "rejected",
+                "cancelled",
+                "canceled",
+                "declined",
+                "withdrawn",
+                "d",
+            ]:
                 continue
 
         raw_name = p.get("name") or "Competitor"
@@ -258,7 +276,11 @@ async def upload_groupifier_wcif(
 
         role_id = default_role_id
         role_name = default_role.name if default_role else "Competitor"
-        role_color = (default_role.style or {}).get("background_color", "#2563EB") if default_role else "#2563EB"
+        role_color = (
+            (default_role.style or {}).get("background_color", "#2563EB")
+            if default_role
+            else "#2563EB"
+        )
 
         roles = p.get("roles", [])
         if "delegate" in roles or "trainee-delegate" in roles:
@@ -268,22 +290,24 @@ async def upload_groupifier_wcif(
             role_name = "Organizer"
             role_color = "#D97706"
 
-        competitors_list.append({
-            "id": f"wca-{reg_id}",
-            "csv_index": idx,
-            "registrant_id": reg_id,
-            "name_latin": latin,
-            "name_local": local,
-            "name_raw": raw_name,
-            "wca_id": wca_id,
-            "country_iso2": iso2,
-            "country_name": full_name,
-            "avatar_url": avatar_url,
-            "role_id": role_id,
-            "role_name": role_name,
-            "role_color": role_color,
-            "custom_data": {},
-        })
+        competitors_list.append(
+            {
+                "id": f"wca-{reg_id}",
+                "csv_index": idx,
+                "registrant_id": reg_id,
+                "name_latin": latin,
+                "name_local": local,
+                "name_raw": raw_name,
+                "wca_id": wca_id,
+                "country_iso2": iso2,
+                "country_name": full_name,
+                "avatar_url": avatar_url,
+                "role_id": role_id,
+                "role_name": role_name,
+                "role_color": role_color,
+                "custom_data": {},
+            }
+        )
         idx += 1
 
     return {
@@ -296,10 +320,12 @@ async def upload_groupifier_wcif(
     }
 
 
-@router.get("/competitions/{competition_id}/registrations", response_model=WCARegistrationsCategorized)
+@router.get(
+    "/competitions/{competition_id}/registrations", response_model=WCARegistrationsCategorized
+)
 async def get_competition_registrations(
     competition_id: str,
-    authorization: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
 ):
     """
     Fetches registrations for a competition from WCA API, separated into:
@@ -309,7 +335,7 @@ async def get_competition_registrations(
     return await get_competition_registrations_categorized(competition_id, token)
 
 
-@router.post("/competitions/{competition_id}/import", response_model=List[CompetitorOut])
+@router.post("/competitions/{competition_id}/import", response_model=list[CompetitorOut])
 async def import_selected_registrations(
     competition_id: str,
     payload: WCAImportRequest,
@@ -318,10 +344,7 @@ async def import_selected_registrations(
     """
     Imports user-selected registrations into the active badge generator list.
     """
-    selected_items = [
-        item for item in payload.selected_registrations
-        if item.selected
-    ]
+    selected_items = [item for item in payload.selected_registrations if item.selected]
     if not selected_items:
         raise HTTPException(status_code=400, detail="No competitors were selected for import")
 

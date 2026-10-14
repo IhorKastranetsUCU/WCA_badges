@@ -1,18 +1,18 @@
 from datetime import datetime
-from typing import List, Optional
+
 from pydantic import BaseModel
 
 
 class CompetitorBase(BaseModel):
     name_latin: str
-    name_local: Optional[str] = None
+    name_local: str | None = None
     name_raw: str
-    wca_id: Optional[str] = None
-    country_iso2: Optional[str] = None
-    country_name: Optional[str] = None
-    role_id: Optional[str] = None
+    wca_id: str | None = None
+    country_iso2: str | None = None
+    country_name: str | None = None
+    role_id: str | None = None
     csv_index: int = 1
-    avatar_url: Optional[str] = None
+    avatar_url: str | None = None
 
 
 class CompetitorCreate(CompetitorBase):
@@ -20,7 +20,7 @@ class CompetitorCreate(CompetitorBase):
 
 
 class CompetitorAvatarUpdate(BaseModel):
-    avatar_url: Optional[str] = None
+    avatar_url: str | None = None
 
 
 class CompetitorOut(CompetitorBase):
@@ -33,11 +33,10 @@ class CompetitorOut(CompetitorBase):
 
 class CSVUploadResponse(BaseModel):
     total_imported: int
-    competitors: List[CompetitorOut]
+    competitors: list[CompetitorOut]
 
 
 class CompetitorBatchAvatarsResponse(BaseModel):
     total_checked: int
     avatars_found: int
     updated: dict
-

@@ -1,12 +1,13 @@
 import io
-import re
 import logging
-from typing import Any, Dict, List, Optional
+import re
+from typing import Any
+
 import pypdf
 
 logger = logging.getLogger(__name__)
 
-EVENT_NAME_MAP: Dict[str, str] = {
+EVENT_NAME_MAP: dict[str, str] = {
     "3x3x3 Cube": "333",
     "2x2x2 Cube": "222",
     "4x4x4 Cube": "444",
@@ -33,7 +34,7 @@ def normalize_name(name: str) -> str:
     return " ".join(cleaned.lower().split())
 
 
-def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
+def parse_competitor_cards_pdf(pdf_bytes: bytes) -> dict[str, Any]:
     """
     Parses a Groupifier competitor cards PDF sheet (3 cols x 4 rows per A4 page).
     Extracts competitor cards with:
@@ -45,17 +46,17 @@ def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
     stream = io.BytesIO(pdf_bytes)
     reader = pypdf.PdfReader(stream)
 
-    all_cards: List[Dict[str, Any]] = []
-    assignments_by_reg_id: Dict[str, Dict[str, Any]] = {}
-    assignments_by_wca_id: Dict[str, Dict[str, Any]] = {}
-    assignments_by_name: Dict[str, Dict[str, Any]] = {}
+    all_cards: list[dict[str, Any]] = []
+    assignments_by_reg_id: dict[str, dict[str, Any]] = {}
+    assignments_by_wca_id: dict[str, dict[str, Any]] = {}
+    assignments_by_name: dict[str, dict[str, Any]] = {}
 
     # Coordinate boundaries for standard 3x4 Groupifier grid (A4: 595.28 x 841.89 pt)
     x_bounds = [(0.0, 198.0), (198.0, 395.0), (395.0, 600.0)]
     y_bounds = [(644.0, 855.0), (451.0, 644.0), (256.5, 451.0), (40.0, 256.5)]
 
     for page_idx, page in enumerate(reader.pages):
-        items: List[tuple[float, float, str]] = []
+        items: list[tuple[float, float, str]] = []
 
         def visitor(text: str, cm: Any, tm: Any, font_dict: Any, font_size: Any) -> None:
             t = text.strip()
@@ -68,9 +69,11 @@ def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
             logger.warning(f"Error extracting text with visitor on page {page_idx + 1}: {e}")
             continue
 
-        for r_idx, (y_min, y_max) in enumerate(y_bounds):
-            for c_idx, (x_min, x_max) in enumerate(x_bounds):
-                card_items = [it for it in items if x_min <= it[0] < x_max and y_min <= it[1] < y_max]
+        for _r_idx, (y_min, y_max) in enumerate(y_bounds):
+            for _c_idx, (x_min, x_max) in enumerate(x_bounds):
+                card_items = [
+                    it for it in items if x_min <= it[0] < x_max and y_min <= it[1] < y_max
+                ]
                 if not card_items:
                     continue
 
@@ -81,9 +84,9 @@ def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
 
                 # Group tokens into lines by Y position (tokens within 3.5pt belong to same line)
                 y_sorted = sorted(card_items, key=lambda it: (-it[1], it[0]))
-                lines: List[List[tuple[float, float, str]]] = []
-                cur_line: List[tuple[float, float, str]] = []
-                cur_y: Optional[float] = None
+                lines: list[list[tuple[float, float, str]]] = []
+                cur_line: list[tuple[float, float, str]] = []
+                cur_y: float | None = None
 
                 for it in y_sorted:
                     if cur_y is None or abs(it[1] - cur_y) < 3.5:
@@ -107,9 +110,9 @@ def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
                     continue
 
                 # Name consists of lines preceding the ID line
-                name_tokens: List[str] = []
-                for l in lines[:id_line_idx]:
-                    name_tokens.extend([it[2] for it in l])
+                name_tokens: list[str] = []
+                for line_items in lines[:id_line_idx]:
+                    name_tokens.extend([it[2] for it in line_items])
                 name_str = " ".join(name_tokens).strip()
 
                 # Parse ID line
@@ -123,7 +126,7 @@ def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
                 wca_id = wca_id_match.group(1).upper() if wca_id_match else None
 
                 # Locate column header line: contains "Event"
-                col_headers: List[tuple[str, float]] = []
+                col_headers: list[tuple[str, float]] = []
                 header_line_idx = -1
                 for l_i, line in enumerate(lines[id_line_idx + 1 :], start=id_line_idx + 1):
                     line_txt = " ".join(it[2] for it in line)
@@ -142,14 +145,14 @@ def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
                         col_headers.sort(key=lambda ch: ch[1])
                         break
 
-                assignments: Dict[str, Dict[str, List[str]]] = {}
+                assignments: dict[str, dict[str, list[str]]] = {}
 
                 if header_line_idx != -1 and col_headers:
                     min_col_x = col_headers[0][1] - 15.0
 
                     for line in lines[header_line_idx + 1 :]:
                         line_text = " ".join(it[2] for it in line)
-                        matched_ev_id: Optional[str] = None
+                        matched_ev_id: str | None = None
                         for ev_str, ev_id in EVENT_NAME_MAP.items():
                             if line_text.startswith(ev_str) or line_text.startswith(
                                 ev_str.replace("3x3x3 One-Handed", "3x3x3 One- Handed")
@@ -159,7 +162,7 @@ def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
                         if not matched_ev_id:
                             continue
 
-                        event_assigns: Dict[str, List[str]] = {
+                        event_assigns: dict[str, list[str]] = {
                             "comp": [],
                             "scr": [],
                             "judge": [],
@@ -182,9 +185,11 @@ def parse_competitor_cards_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
                                 continue
 
                             # Assign to column interval based on adjacent midpoints
-                            target_role: Optional[str] = None
+                            target_role: str | None = None
                             for idx, (role, c_x) in enumerate(col_headers):
-                                l_bound = -9999.0 if idx == 0 else (col_headers[idx - 1][1] + c_x) / 2.0
+                                l_bound = (
+                                    -9999.0 if idx == 0 else (col_headers[idx - 1][1] + c_x) / 2.0
+                                )
                                 r_bound = (
                                     9999.0
                                     if idx == len(col_headers) - 1

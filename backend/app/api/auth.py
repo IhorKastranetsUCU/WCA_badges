@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +50,7 @@ async def get_auth_config():
 
 
 @router.get("/google/url", response_model=GoogleAuthUrlResponse)
-async def get_google_auth_url(redirect_uri: Optional[str] = None):
+async def get_google_auth_url(redirect_uri: str | None = None):
     """
     Returns Google OAuth & AWS Cognito authorization URLs.
     """
@@ -81,7 +81,9 @@ async def handle_google_callback(
     sub = (google_user.get("sub") or "").strip()
 
     if not email:
-        raise HTTPException(status_code=400, detail="Google authentication did not provide an email address")
+        raise HTTPException(
+            status_code=400, detail="Google authentication did not provide an email address"
+        )
 
     # 2. Write Google user in database (firstly you write him in database)
     db_user = None
@@ -117,7 +119,9 @@ async def handle_google_callback(
         logger.error("Database user error during Google callback: %s", e)
 
     # 3. Check if user already has a linked WCA account preserved in database
-    linked_wca_id = (payload.wca_id or (db_user.wca_id if db_user else None) or GOOGLE_WCA_LINKS.get(email) or "").strip()
+    linked_wca_id = (
+        payload.wca_id or (db_user.wca_id if db_user else None) or GOOGLE_WCA_LINKS.get(email) or ""
+    ).strip()
 
     if linked_wca_id:
         clean_wca_id = linked_wca_id.upper()
@@ -154,7 +158,8 @@ async def handle_google_callback(
         wca_profile.needs_wca_link = False
 
         comps = await get_competitions_for_google_user(
-            wca_profile, (db_user.wca_access_token if db_user else None) or auth_result.get("access_token", "")
+            wca_profile,
+            (db_user.wca_access_token if db_user else None) or auth_result.get("access_token", ""),
         )
         token_str = encode_profile_token(wca_profile)
         GOOGLE_PROFILE_CACHE[token_str] = wca_profile
@@ -208,10 +213,12 @@ async def link_wca_account(
     """
     user_email = (payload.user_email or "").strip().lower()
     if not user_email:
-        raise HTTPException(status_code=400, detail="User email is required to associate WCA account")
+        raise HTTPException(
+            status_code=400, detail="User email is required to associate WCA account"
+        )
 
-    wca_profile: Optional[WCAProfile] = None
-    wca_access_token: Optional[str] = None
+    wca_profile: WCAProfile | None = None
+    wca_access_token: str | None = None
 
     if payload.wca_code:
         token_data = await exchange_wca_code(payload.wca_code, payload.redirect_uri)
@@ -229,7 +236,9 @@ async def link_wca_account(
         raise HTTPException(status_code=400, detail="Please provide wca_id, wca_code, or wca_token")
 
     if not wca_profile or not wca_profile.wca_id:
-        raise HTTPException(status_code=400, detail="Could not retrieve valid WCA profile from WCA API")
+        raise HTTPException(
+            status_code=400, detail="Could not retrieve valid WCA profile from WCA API"
+        )
 
     # Preserve WCA data in database
     stmt = select(User).where(User.email == user_email)

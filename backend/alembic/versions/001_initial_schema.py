@@ -1,19 +1,21 @@
 """initial schema
 
 Revision ID: 001_initial_schema
-Revises: 
+Revises:
 Create Date: 2026-09-30 18:00:00.000000
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
+
 revision: str = "001_initial_schema"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -38,7 +40,12 @@ def upgrade() -> None:
         sa.Column("wca_id", sa.String(length=32), nullable=True),
         sa.Column("country_iso2", sa.String(length=8), nullable=True),
         sa.Column("country_name", sa.String(length=100), nullable=True),
-        sa.Column("role_id", sa.String(length=64), sa.ForeignKey("roles.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "role_id",
+            sa.String(length=64),
+            sa.ForeignKey("roles.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index(op.f("ix_competitors_wca_id"), "competitors", ["wca_id"], unique=False)

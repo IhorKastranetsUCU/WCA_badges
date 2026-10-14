@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import Column, DateTime, Integer, String
 
 from app.core.database import Base
@@ -15,4 +16,4 @@ class Meeting(Base):
     duration_minutes = Column(Integer, nullable=False)
     participants_count = Column(Integer, nullable=False, default=1)
     organizer = Column(String(255), nullable=False, default="Team Member")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)

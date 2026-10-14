@@ -33,6 +33,8 @@ frontend/dist/
 .env
 .env.local
 .env.*.local
+*.json.local
+backend/app/services/google_wca_links.json
 
 # IDEs
 .idea/

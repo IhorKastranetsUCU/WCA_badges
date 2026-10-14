@@ -1,17 +1,18 @@
+import base64
 import io
+import logging
 import os
 import re
-import base64
-import logging
-from typing import Any, Dict, List, Optional, Tuple
-from reportlab.lib.colors import HexColor
-from reportlab.lib.units import mm
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.utils import ImageReader
+from typing import Any
+
 import qrcode
 from PIL import Image, ImageOps
+from reportlab.lib.colors import HexColor
+from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +21,14 @@ FONT_REGULAR = "Helvetica"
 FONT_BOLD = "Helvetica-Bold"
 _FONTS_REGISTERED = False
 
-PAPER_SIZES: Dict[str, Tuple[float, float]] = {
+PAPER_SIZES: dict[str, tuple[float, float]] = {
     "A4": (210.0, 297.0),
     "A5": (148.0, 210.0),
     "Letter": (215.9, 279.4),
     "Legal": (215.9, 355.6),
 }
 
-_AVATAR_CACHE: Dict[str, ImageReader] = {}
+_AVATAR_CACHE: dict[str, ImageReader] = {}
 
 
 def _ensure_fonts_registered():
@@ -89,25 +90,34 @@ def _ensure_fonts_registered():
             logger.warning(f"Could not register DejaVuSans-Bold: {e}")
 
     try:
-        roboto_reg = os.path.join(FONT_DIR, "Roboto-Regular.ttf")
-        roboto_bold = os.path.join(FONT_DIR, "Roboto-Bold.ttf")
+        roboto_reg = os.path.join(fonts_dir, "Roboto-Regular.ttf")
+        roboto_bold = os.path.join(fonts_dir, "Roboto-Bold.ttf")
         if os.path.exists(roboto_reg):
             pdfmetrics.registerFont(TTFont("Roboto", roboto_reg))
         if os.path.exists(roboto_bold):
             pdfmetrics.registerFont(TTFont("Roboto-Bold", roboto_bold))
-        if "Roboto" in pdfmetrics.getRegisteredFontNames() and "Roboto-Bold" in pdfmetrics.getRegisteredFontNames():
+        if (
+            "Roboto" in pdfmetrics.getRegisteredFontNames()
+            and "Roboto-Bold" in pdfmetrics.getRegisteredFontNames()
+        ):
             pdfmetrics.registerFontFamily("Roboto", normal="Roboto", bold="Roboto-Bold")
     except Exception as e:
         logger.warning(f"Could not register Roboto: {e}")
 
     try:
-        if "Inter" in pdfmetrics.getRegisteredFontNames() and "Inter-Bold" in pdfmetrics.getRegisteredFontNames():
+        if (
+            "Inter" in pdfmetrics.getRegisteredFontNames()
+            and "Inter-Bold" in pdfmetrics.getRegisteredFontNames()
+        ):
             pdfmetrics.registerFontFamily("Inter", normal="Inter", bold="Inter-Bold")
     except Exception:
         pass
 
     try:
-        if "DejaVuSans" in pdfmetrics.getRegisteredFontNames() and "DejaVuSans-Bold" in pdfmetrics.getRegisteredFontNames():
+        if (
+            "DejaVuSans" in pdfmetrics.getRegisteredFontNames()
+            and "DejaVuSans-Bold" in pdfmetrics.getRegisteredFontNames()
+        ):
             pdfmetrics.registerFontFamily("DejaVuSans", normal="DejaVuSans", bold="DejaVuSans-Bold")
     except Exception:
         pass
@@ -115,13 +125,17 @@ def _ensure_fonts_registered():
     _FONTS_REGISTERED = True
 
 
-def get_pdf_font(family: Optional[str] = None, is_bold: bool = False) -> str:
+def get_pdf_font(family: str | None = None, is_bold: bool = False) -> str:
     _ensure_fonts_registered()
     fam = (family or "").lower()
     reg_fonts = pdfmetrics.getRegisteredFontNames()
     if "Roboto" in reg_fonts and "roboto" in fam:
         return "Roboto-Bold" if is_bold else "Roboto"
-    if "Inter" in reg_fonts and (not fam or "inter" in fam or fam in ["sans-serif", "system-ui", "arial", "helvetica", "montserrat", "open sans"]):
+    if "Inter" in reg_fonts and (
+        not fam
+        or "inter" in fam
+        or fam in ["sans-serif", "system-ui", "arial", "helvetica", "montserrat", "open sans"]
+    ):
         return "Inter-Bold" if is_bold else "Inter"
     if "DejaVuSans" in reg_fonts:
         return "DejaVuSans-Bold" if is_bold else "DejaVuSans"
@@ -190,7 +204,9 @@ def draw_flag_image_or_vector(
 draw_flag_vector = draw_flag_image_or_vector
 
 
-def get_optimized_avatar(avatar_url: str, target_w_mm: float, target_h_mm: float) -> Optional[ImageReader]:
+def get_optimized_avatar(
+    avatar_url: str, target_w_mm: float, target_h_mm: float
+) -> ImageReader | None:
     """
     Downsamples avatar to target print dimensions at ~300 DPI,
     center-crops/fits preserving exact aspect ratio without stretching (object-fit: cover),
@@ -210,6 +226,7 @@ def get_optimized_avatar(avatar_url: str, target_w_mm: float, target_h_mm: float
             img = Image.open(io.BytesIO(raw_bytes))
         elif avatar_url.startswith("http://") or avatar_url.startswith("https://"):
             import urllib.request
+
             req = urllib.request.Request(avatar_url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=5.0) as resp:
                 img = Image.open(io.BytesIO(resp.read()))
@@ -253,7 +270,7 @@ def get_optimized_avatar(avatar_url: str, target_w_mm: float, target_h_mm: float
 def draw_qr_code(
     c: canvas.Canvas,
     content: str,
-    label: Optional[str],
+    label: str | None,
     label_pos: str,
     x: float,
     y: float,
@@ -262,8 +279,8 @@ def draw_qr_code(
     opacity: float = 1.0,
     fg_color: str = "#000000",
     bg_color: str = "#FFFFFF",
-    font_family: Optional[str] = None,
-    font_size: Optional[float] = None,
+    font_family: str | None = None,
+    font_size: float | None = None,
     text_color: str = "#1E293B",
 ):
     c.saveState()
@@ -333,7 +350,7 @@ def format_schedule_event_name(name: str) -> str:
     return cleaned
 
 
-def resolve_competitor_task(entry: Dict[str, Any], comp: Optional[Dict[str, Any]]) -> str:
+def resolve_competitor_task(entry: dict[str, Any], comp: dict[str, Any] | None) -> str:
     if not comp or entry.get("isBreak"):
         return ""
     assignments = comp.get("assignments")
@@ -413,14 +430,14 @@ def resolve_competitor_task(entry: Dict[str, Any], comp: Optional[Dict[str, Any]
 
 def draw_schedule_table(
     c: canvas.Canvas,
-    title: Optional[str],
+    title: str | None,
     x: float,
     y: float,
     w: float,
     h: float,
     opacity: float = 1.0,
-    schedule_data: Optional[Dict[str, Any]] = None,
-    competitor: Optional[Dict[str, Any]] = None,
+    schedule_data: dict[str, Any] | None = None,
+    competitor: dict[str, Any] | None = None,
 ):
     c.saveState()
     c.setFillAlpha(opacity)
@@ -439,42 +456,154 @@ def draw_schedule_table(
             {
                 "dayName": "Friday",
                 "entries": [
-                    {"time": "08:30", "event": "Check-in", "task": "", "roomColor": "#C2F5D5", "isBreak": True},
-                    {"time": "09:00", "event": "6x6x6 Round 1", "task": "C 1", "roomColor": "#C2F5D5"},
-                    {"time": "10:00", "event": "7x7x7 Round 1", "task": "C 2", "roomColor": "#C2F5D5"},
+                    {
+                        "time": "08:30",
+                        "event": "Check-in",
+                        "task": "",
+                        "roomColor": "#C2F5D5",
+                        "isBreak": True,
+                    },
+                    {
+                        "time": "09:00",
+                        "event": "6x6x6 Round 1",
+                        "task": "C 1",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "10:00",
+                        "event": "7x7x7 Round 1",
+                        "task": "C 2",
+                        "roomColor": "#C2F5D5",
+                    },
                     {"time": "11:00", "event": "3x3 MBF", "task": "C 1", "roomColor": "#FB9DB0"},
-                    {"time": "12:30", "event": "LUNCH", "task": "", "roomColor": "#E2E8F0", "isBreak": True},
-                    {"time": "13:30", "event": "3x3 FM Attempt 1", "task": "C 1", "roomColor": "#FB9DB0"},
-                    {"time": "15:00", "event": "Clock Round 1", "task": "J 1", "roomColor": "#C2F5D5"},
-                    {"time": "16:30", "event": "Megaminx Round 1", "task": "C 2", "roomColor": "#C2F5D5"},
-                ]
+                    {
+                        "time": "12:30",
+                        "event": "LUNCH",
+                        "task": "",
+                        "roomColor": "#E2E8F0",
+                        "isBreak": True,
+                    },
+                    {
+                        "time": "13:30",
+                        "event": "3x3 FM Attempt 1",
+                        "task": "C 1",
+                        "roomColor": "#FB9DB0",
+                    },
+                    {
+                        "time": "15:00",
+                        "event": "Clock Round 1",
+                        "task": "J 1",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "16:30",
+                        "event": "Megaminx Round 1",
+                        "task": "C 2",
+                        "roomColor": "#C2F5D5",
+                    },
+                ],
             },
             {
                 "dayName": "Saturday",
                 "entries": [
-                    {"time": "08:30", "event": "Check-in", "task": "", "roomColor": "#C2F5D5", "isBreak": True},
-                    {"time": "09:00", "event": "Opening", "task": "", "roomColor": "#C2F5D5", "isBreak": True},
-                    {"time": "09:30", "event": "5x5x5 Round 1", "task": "C 2", "roomColor": "#C2F5D5"},
-                    {"time": "11:00", "event": "Pyraminx Round 1", "task": "J 2", "roomColor": "#C2F5D5"},
-                    {"time": "12:30", "event": "LUNCH", "task": "", "roomColor": "#E2E8F0", "isBreak": True},
-                    {"time": "13:30", "event": "2x2x2 Round 1", "task": "C 1", "roomColor": "#C2F5D5"},
-                    {"time": "15:00", "event": "3x3x3 Round 1", "task": "C 3", "roomColor": "#C2F5D5"},
-                    {"time": "17:30", "event": "Skewb Round 1", "task": "S 2", "roomColor": "#C2F5D5"},
-                ]
+                    {
+                        "time": "08:30",
+                        "event": "Check-in",
+                        "task": "",
+                        "roomColor": "#C2F5D5",
+                        "isBreak": True,
+                    },
+                    {
+                        "time": "09:00",
+                        "event": "Opening",
+                        "task": "",
+                        "roomColor": "#C2F5D5",
+                        "isBreak": True,
+                    },
+                    {
+                        "time": "09:30",
+                        "event": "5x5x5 Round 1",
+                        "task": "C 2",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "11:00",
+                        "event": "Pyraminx Round 1",
+                        "task": "J 2",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "12:30",
+                        "event": "LUNCH",
+                        "task": "",
+                        "roomColor": "#E2E8F0",
+                        "isBreak": True,
+                    },
+                    {
+                        "time": "13:30",
+                        "event": "2x2x2 Round 1",
+                        "task": "C 1",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "15:00",
+                        "event": "3x3x3 Round 1",
+                        "task": "C 3",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "17:30",
+                        "event": "Skewb Round 1",
+                        "task": "S 2",
+                        "roomColor": "#C2F5D5",
+                    },
+                ],
             },
             {
                 "dayName": "Sunday",
                 "entries": [
-                    {"time": "09:00", "event": "4x4x4 Round 2", "task": "C 1", "roomColor": "#C2F5D5"},
-                    {"time": "10:30", "event": "3x3x3 Round 2", "task": "C 2", "roomColor": "#C2F5D5"},
-                    {"time": "12:00", "event": "Pyraminx Final", "task": "QR", "roomColor": "#C2F5D5"},
-                    {"time": "12:45", "event": "LUNCH", "task": "", "roomColor": "#E2E8F0", "isBreak": True},
+                    {
+                        "time": "09:00",
+                        "event": "4x4x4 Round 2",
+                        "task": "C 1",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "10:30",
+                        "event": "3x3x3 Round 2",
+                        "task": "C 2",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "12:00",
+                        "event": "Pyraminx Final",
+                        "task": "QR",
+                        "roomColor": "#C2F5D5",
+                    },
+                    {
+                        "time": "12:45",
+                        "event": "LUNCH",
+                        "task": "",
+                        "roomColor": "#E2E8F0",
+                        "isBreak": True,
+                    },
                     {"time": "13:45", "event": "2x2x2 Final", "task": "QR", "roomColor": "#C2F5D5"},
-                    {"time": "14:45", "event": "3x3 BF Final", "task": "QR", "roomColor": "#FB9DB0"},
+                    {
+                        "time": "14:45",
+                        "event": "3x3 BF Final",
+                        "task": "QR",
+                        "roomColor": "#FB9DB0",
+                    },
                     {"time": "15:45", "event": "3x3x3 Final", "task": "QR", "roomColor": "#C2F5D5"},
-                    {"time": "17:15", "event": "AWARDS", "task": "", "roomColor": "#FEF3C7", "isBreak": True},
-                ]
-            }
+                    {
+                        "time": "17:15",
+                        "event": "AWARDS",
+                        "task": "",
+                        "roomColor": "#FEF3C7",
+                        "isBreak": True,
+                    },
+                ],
+            },
         ]
 
     num_cols = max(1, min(len(days), 4))
@@ -483,7 +612,7 @@ def draw_schedule_table(
 
     for i, day in enumerate(days[:num_cols]):
         col_x = x + i * col_w
-        day_name = str(day.get("dayName") or f"Day {i+1}")
+        day_name = str(day.get("dayName") or f"Day {i + 1}")
 
         # Day column header (full clean name, scaled dynamically to avoid clipping)
         c.setFillColor(HexColor("#334155"))
@@ -509,7 +638,7 @@ def draw_schedule_table(
             r_y = y + h - header_h - (r_idx + 1) * row_h
             t_time = str(entry.get("time", ""))
             t_ev = format_schedule_event_name(str(entry.get("event", "")))
-            
+
             # If competitor has assignments, resolve task (C 2, J 1, S 3).
             # If competitor has no assignments, leave task completely empty ("").
             t_task = ""
@@ -546,10 +675,15 @@ def draw_schedule_table(
                     pill_x = col_x + col_w - pill_w - 1.0
 
                 event_x = col_x + col_w * 0.28
-                max_ev_w = max(5.0, (pill_x - event_x - 1.0) if t_task else (col_x + col_w - event_x - 1.5))
+                max_ev_w = max(
+                    5.0, (pill_x - event_x - 1.0) if t_task else (col_x + col_w - event_x - 1.5)
+                )
 
                 ev_font_size = 4.5
-                while c.stringWidth(t_ev, get_pdf_font(None, True), ev_font_size) > max_ev_w and ev_font_size > 3.0:
+                while (
+                    c.stringWidth(t_ev, get_pdf_font(None, True), ev_font_size) > max_ev_w
+                    and ev_font_size > 3.0
+                ):
                     ev_font_size -= 0.3
 
                 c.setFont(get_pdf_font(None, True), ev_font_size)
@@ -586,17 +720,17 @@ def draw_schedule_table(
 
 def draw_badge_contents(
     c: canvas.Canvas,
-    comp: Dict[str, Any],
-    role_data: Dict[str, Any],
+    comp: dict[str, Any],
+    role_data: dict[str, Any],
     side_name: str,
-    side_def: Dict[str, Any],
+    side_def: dict[str, Any],
     origin_x: float,
     origin_y: float,
     badge_w_pt: float,
     badge_h_pt: float,
     badge_h_mm: float,
-    bg_params: Optional[Dict[str, Any]],
-    schedule_data: Optional[Dict[str, Any]] = None,
+    bg_params: dict[str, Any] | None,
+    schedule_data: dict[str, Any] | None = None,
 ):
     c.saveState()
 
@@ -678,13 +812,17 @@ def draw_badge_contents(
                 c.setStrokeColor(hex_to_color(style.get("border_color", "#000000")))
                 c.setLineWidth(border_w)
             if radius_pt > 0:
-                c.roundRect(pt_x, pt_y, pt_w, pt_h, radius_pt, fill=1, stroke=1 if has_stroke else 0)
+                c.roundRect(
+                    pt_x, pt_y, pt_w, pt_h, radius_pt, fill=1, stroke=1 if has_stroke else 0
+                )
             else:
                 c.rect(pt_x, pt_y, pt_w, pt_h, fill=1, stroke=1 if has_stroke else 0)
 
         # Flag
         if elem_type == "flag":
-            draw_flag_image_or_vector(c, comp.get("country_iso2", "UA"), pt_x, pt_y, pt_w, pt_h, opacity)
+            draw_flag_image_or_vector(
+                c, comp.get("country_iso2", "UA"), pt_x, pt_y, pt_w, pt_h, opacity
+            )
             c.restoreState()
             continue
 
@@ -728,9 +866,20 @@ def draw_badge_contents(
             qr_fsize = float(elem.get("qr_font_size", 7.0) or 7.0)
             qr_tcolor = elem.get("qr_text_color", "#1E293B")
             draw_qr_code(
-                c, qr_text, qr_label, qr_label_pos, pt_x, pt_y, pt_w, pt_h,
-                opacity=opacity, fg_color=qr_fg, bg_color=qr_bg,
-                font_family=qr_font, font_size=qr_fsize, text_color=qr_tcolor,
+                c,
+                qr_text,
+                qr_label,
+                qr_label_pos,
+                pt_x,
+                pt_y,
+                pt_w,
+                pt_h,
+                opacity=opacity,
+                fg_color=qr_fg,
+                bg_color=qr_bg,
+                font_family=qr_font,
+                font_size=qr_fsize,
+                text_color=qr_tcolor,
             )
             c.restoreState()
             continue
@@ -745,7 +894,9 @@ def draw_badge_contents(
                 pt_w,
                 pt_h,
                 opacity,
-                schedule_data=schedule_data or elem.get("schedule_data") or comp.get("schedule_data"),
+                schedule_data=schedule_data
+                or elem.get("schedule_data")
+                or comp.get("schedule_data"),
                 competitor=comp,
             )
             c.restoreState()
@@ -844,7 +995,9 @@ def draw_badge_contents(
 
         # Correct string width measurement taking _charSpace into account
         base_w = c.stringWidth(text_content, font_name, font_size)
-        total_w = base_w + (max(0, len(text_content) - 1) * char_space_pt if char_space_pt > 0 else 0)
+        total_w = base_w + (
+            max(0, len(text_content) - 1) * char_space_pt if char_space_pt > 0 else 0
+        )
 
         if total_w > max_w and max_w > 0:
             scale_ratio = max_w / total_w
@@ -854,12 +1007,16 @@ def draw_badge_contents(
                 char_space_pt = char_space_pt * scale_ratio
                 c._charSpace = char_space_pt
             base_w = c.stringWidth(text_content, font_name, font_size)
-            total_w = base_w + (max(0, len(text_content) - 1) * char_space_pt if char_space_pt > 0 else 0)
+            total_w = base_w + (
+                max(0, len(text_content) - 1) * char_space_pt if char_space_pt > 0 else 0
+            )
             while total_w > max_w and font_size > 4.0:
                 font_size -= 0.3
                 c.setFont(font_name, font_size)
                 base_w = c.stringWidth(text_content, font_name, font_size)
-                total_w = base_w + (max(0, len(text_content) - 1) * char_space_pt if char_space_pt > 0 else 0)
+                total_w = base_w + (
+                    max(0, len(text_content) - 1) * char_space_pt if char_space_pt > 0 else 0
+                )
 
         # Accurate optical baseline alignment (0.35 * font_size below center)
         mid_y = pt_y + (pt_h / 2.0)
@@ -880,10 +1037,10 @@ def draw_badge_contents(
 
 def draw_single_badge(
     c: canvas.Canvas,
-    comp: Dict[str, Any],
-    role_data: Dict[str, Any],
+    comp: dict[str, Any],
+    role_data: dict[str, Any],
     side_name: str,
-    side_def: Dict[str, Any],
+    side_def: dict[str, Any],
     origin_x: float,
     origin_y: float,
     cell_w_pt: float,
@@ -891,10 +1048,10 @@ def draw_single_badge(
     badge_w_pt: float,
     badge_h_pt: float,
     badge_h_mm: float,
-    bg_params: Optional[Dict[str, Any]],
+    bg_params: dict[str, Any] | None,
     rotate_badge_deg: float = 0.0,
     crop_marks: bool = True,
-    schedule_data: Optional[Dict[str, Any]] = None,
+    schedule_data: dict[str, Any] | None = None,
 ):
     c.saveState()
 
@@ -948,15 +1105,15 @@ def draw_single_badge(
 
 
 def render_badges_pdf(
-    competitors: List[Dict[str, Any]],
-    roles: Dict[str, Dict[str, Any]],
-    template_dimensions: Dict[str, Any],
-    sides_config: Dict[str, Any],
+    competitors: list[dict[str, Any]],
+    roles: dict[str, dict[str, Any]],
+    template_dimensions: dict[str, Any],
+    sides_config: dict[str, Any],
     side_to_export: str = "both",
     paper_size: str = "A4",
     parity: str = "front_even",
     crop_marks: bool = True,
-    schedule_data: Optional[Dict[str, Any]] = None,
+    schedule_data: dict[str, Any] | None = None,
 ) -> bytes:
     _ensure_fonts_registered()
     badge_w_mm = float(template_dimensions.get("width_mm", 100.0))
@@ -1021,7 +1178,7 @@ def render_badges_pdf(
     c = canvas.Canvas(buffer, pagesize=(sheet_w_pt, sheet_h_pt))
 
     # Pre-cache background images
-    side_bg_draw_params: Dict[str, Any] = {}
+    side_bg_draw_params: dict[str, Any] = {}
     sides_to_check = ["front", "back"] if side_to_export == "both" else [side_to_export]
     for side_name in sides_to_check:
         side_def = sides_config.get(side_name, {})

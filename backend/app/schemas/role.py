@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -27,8 +28,8 @@ class RoleCreate(RoleBase):
 
 
 class RoleUpdate(BaseModel):
-    name: Optional[str] = None
-    style: Optional[Dict[str, Any]] = None
+    name: str | None = None
+    style: dict[str, Any] | None = None
 
 
 class RoleAssignRequest(BaseModel):
@@ -39,7 +40,7 @@ class RoleOut(RoleBase):
     id: str
     is_default: bool
     created_at: datetime
-    assigned_competitor_ids: List[str] = Field(default_factory=list)
+    assigned_competitor_ids: list[str] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
