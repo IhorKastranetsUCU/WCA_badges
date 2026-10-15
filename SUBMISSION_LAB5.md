@@ -9,8 +9,9 @@
 ---
 
 ## 1. Commit Link
-👉 **[GitHub Commit c27e228](https://github.com/IhorKastranetsUCU/WCA_badges/commit/c27e228)**  
-*(Full feature commit range: [`2ae2786..c27e228`](https://github.com/IhorKastranetsUCU/WCA_badges/compare/8ea335f...c27e228))*
+👉 **[GitHub Commit 624fe93](https://github.com/IhorKastranetsUCU/WCA_badges/commit/624fe93)**  
+*(Feature commit range: [`2ae2786..624fe93`](https://github.com/IhorKastranetsUCU/WCA_badges/compare/8ea335f...624fe93))*  
+*(CI/CD Automated Deployment Run: [Deploy to AWS #38786144993 — Success ✅](https://github.com/IhorKastranetsUCU/WCA_badges/actions/runs/38786144993))*
 
 ---
 
