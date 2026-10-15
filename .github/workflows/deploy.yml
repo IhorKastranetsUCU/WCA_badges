@@ -1,4 +1,4 @@
-name: Deploy to AWS (OIDC)
+name: Deploy to AWS
 
 on:
   push:
@@ -47,10 +47,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials via OIDC
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
       - name: Set up Node.js
@@ -60,24 +61,29 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package.json
 
+      - name: Install Frontend Dependencies
+        run: cd frontend && npm ci
+
       - name: Run Makefile deploy-frontend Target
         env:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           CLOUDFRONT_DIST_ID: ${{ secrets.CLOUDFRONT_DIST_ID }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
         run: make deploy-frontend
 
   deploy-backend:
-    name: Deploy Backend (ECR + ECS Fargate)
+    name: Deploy Backend (ECR + Lambda)
     needs: lint-and-test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials via OIDC
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
       - name: Set up Docker Buildx
@@ -87,6 +93,5 @@ jobs:
         env:
           AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
           ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
-          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+          LAMBDA_FUNCTION_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME || 'wca-badges-api' }}
         run: make deploy-backend
