@@ -7,6 +7,7 @@ from sqlalchemy import select, text
 from app.api.auth import router as auth_router
 from app.api.badges import router as badges_router
 from app.api.competitors import router as competitors_router
+from app.api.meetings import router as meetings_router
 from app.api.roles import router as roles_router
 from app.api.wca import router as wca_router
 from app.core.config import settings
@@ -92,3 +93,4 @@ app.include_router(roles_router, prefix="/api")
 app.include_router(badges_router, prefix="/api")
 app.include_router(wca_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(meetings_router, prefix="/api")

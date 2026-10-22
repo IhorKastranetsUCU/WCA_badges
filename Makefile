@@ -137,5 +137,33 @@ report-now:
 	  --message-body '{"week": "$(WEEK)", "source": "make"}' \
 	  --region $(AWS_REGION)
 
-aws-deploy-all: aws-deploy-backend aws-deploy-auth aws-deploy-frontend aws-deploy-reports
-	@echo "==> Full serverless deployment complete!"
+# ------------------------------------------------------------------------------
+# Lab 6: LLM Agenda Parser (Amazon Bedrock, Anthropic Claude / Nova)
+# ------------------------------------------------------------------------------
+
+llm-hello:
+	@PYTHONPATH=backend python3 backend/app/ai/hello.py 2>/dev/null || PYTHONPATH=backend backend/.venv/bin/python backend/app/ai/hello.py
+
+parse:
+	@if [ -z "$(TEXT)" ]; then \
+		echo "Usage: make parse TEXT=\"Пн 10:00, синк по прайсингу, 45 хв. 1) нові тарифи Pro — Олена, 15 хв\""; \
+		exit 1; \
+	fi
+	@PYTHONPATH=backend python3 backend/app/ai/cli.py "$(TEXT)" 2>/dev/null || PYTHONPATH=backend backend/.venv/bin/python backend/app/ai/cli.py "$(TEXT)"
+
+aws-deploy-ai:
+	@echo "==> Deploying AI Agenda Parser Stack (infra/ai.yml)..."
+	aws cloudformation deploy \
+	  --template-file infra/ai.yml \
+	  --stack-name $(PROJECT_NAME)-ai \
+	  --parameter-overrides \
+	    ProjectName=$(PROJECT_NAME) \
+	    ImageUri=$(ECR_REPO_URL):latest \
+	    ParserModel="$(if $(PARSER_MODEL),$(PARSER_MODEL),anthropic.claude-opus-5-5)" \
+	    CognitoUserPoolId="$(if $(COGNITO_USER_POOL_ID),$(COGNITO_USER_POOL_ID),us-east-1_T7FaZwE2p)" \
+	    FrontendUrl=https://$(CLOUDFRONT_DOMAIN) \
+	  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+	  --region $(AWS_REGION)
+
+aws-deploy-all: aws-deploy-backend aws-deploy-auth aws-deploy-frontend aws-deploy-reports aws-deploy-ai
+	@echo "==> Full serverless deployment complete (including AI parser)!"

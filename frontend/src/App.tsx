@@ -11,6 +11,7 @@ import { WcaImportModal } from "@/components/wca/WcaImportModal";
 import { WcaProfileModal } from "@/components/wca/WcaProfileModal";
 import { AddCustomAttendeeModal } from "@/components/wca/AddCustomAttendeeModal";
 import { ExportPdfModal } from "@/components/editor/ExportPdfModal";
+import { PasteAgendaModal } from "@/components/agenda/PasteAgendaModal";
 import { parseClientCsv } from "@/utils/csvParser";
 import { exportBadges } from "@/utils/pdfExport";
 import { readFileAndCompress } from "@/utils/imageUtils";
@@ -343,6 +344,7 @@ export const App: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [isAgendaModalOpen, setIsAgendaModalOpen] = useState<boolean>(false);
   const [competitionSchedule, setCompetitionSchedule] = useState<any>(null);
   const [isUploadingAssignments, setIsUploadingAssignments] = useState<boolean>(false);
   const [assignmentStatusMessage, setAssignmentStatusMessage] = useState<string | null>(null);
@@ -1549,6 +1551,7 @@ export const App: React.FC = () => {
         isWcaAuthenticating={isWcaAuthenticating}
         onGoogleLogin={() => handleGoogleOAuthLogin()}
         isGoogleAuthenticating={isGoogleAuthenticating}
+        onOpenAgendaModal={() => setIsAgendaModalOpen(true)}
       />
 
       {/* Auth notification banners */}
@@ -1712,6 +1715,13 @@ export const App: React.FC = () => {
         competitors={competitors}
         roles={roles}
         scheduleData={competitionSchedule}
+      />
+
+      {/* Lab 6: Paste, Check, Save Agenda Modal */}
+      <PasteAgendaModal
+        isOpen={isAgendaModalOpen}
+        onClose={() => setIsAgendaModalOpen(false)}
+        meetingId="meeting-spry-weekly-sync"
       />
     </div>
   );

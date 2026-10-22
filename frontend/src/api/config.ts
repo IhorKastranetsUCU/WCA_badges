@@ -5,6 +5,9 @@
  * and uses the Vite dev server proxy in development.
  */
 export const LAMBDA_API_BASE_URL = "https://rpsal5rmqzrby3zg7kehgiabqa0gqqfe.lambda-url.us-east-1.on.aws";
+export const AI_PARSER_URL =
+  import.meta.env.VITE_AI_PARSER_URL ||
+  "https://5hd4iz4fib3ovxzyk24ytrsqqe0kjwfl.lambda-url.us-east-1.on.aws/";
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||

@@ -14,6 +14,7 @@ interface TopNavProps {
   isWcaAuthenticating?: boolean;
   onGoogleLogin: () => void;
   isGoogleAuthenticating?: boolean;
+  onOpenAgendaModal?: () => void;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -28,6 +29,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   isWcaAuthenticating = false,
   onGoogleLogin,
   isGoogleAuthenticating = false,
+  onOpenAgendaModal,
 }) => {
   const isGoogle = wcaProfile?.auth_provider === "google";
   return (
@@ -201,6 +203,18 @@ export const TopNav: React.FC<TopNavProps> = ({
               <SlidersHorizontal className="w-3.5 h-3.5" />
             </button>
           </div>
+        )}
+
+        {onOpenAgendaModal && (
+          <button
+            type="button"
+            onClick={onOpenAgendaModal}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 text-purple-700 border border-purple-200 text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+            title="Paste an agenda and parse it with Amazon Bedrock Claude"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <span>Paste Agenda (AI)</span>
+          </button>
         )}
 
         <button

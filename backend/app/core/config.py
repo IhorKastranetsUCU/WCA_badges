@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     COGNITO_DOMAIN_PREFIX: str = "wca-badges-297580066889"
     COGNITO_USER_POOL_CLIENT_ID: str = "3eqs900kmd3koe333lg6jl4pl2"
     COGNITO_REGION: str = "us-east-1"
+    # Amazon Bedrock & AI Parser Settings
+    PARSER_MODEL: str = "anthropic.claude-opus-5-5"
+    COGNITO_USER_POOL_ID: str = "us-east-1_T7FaZwE2p"
+    AWS_REGION: str = "us-east-1"
 
     @property
     def cors_origin_list(self) -> list[str]:
