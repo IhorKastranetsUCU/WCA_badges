@@ -11,7 +11,7 @@
 ---
 
 ## 1. Commit Link
-👉 **[GitHub Commit on main](https://github.com/IhorKastranetsUCU/WCA_badges/commit/REPLACE_WITH_COMMIT_HASH)**  
+👉 **[GitHub Commit 566cc0a](https://github.com/IhorKastranetsUCU/WCA_badges/commit/566cc0a)**  
 
 The infrastructure is defined as code in [`infra/ai.yml`](file:///Users/ihor/Studing/ad/infra/ai.yml) and deployed to AWS via CloudFormation:
 
