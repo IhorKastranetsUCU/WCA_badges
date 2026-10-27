@@ -9,8 +9,9 @@
 ---
 
 ## 1. Commit Link
-👉 **[GitHub Commit 624fe93](https://github.com/IhorKastranetsUCU/WCA_badges/commit/624fe93)**  
-*(Feature commit range: [`2ae2786..624fe93`](https://github.com/IhorKastranetsUCU/WCA_badges/compare/8ea335f...624fe93))*  
+👉 **[GitHub Commit 2ae2786 (Feature Implementation)](https://github.com/IhorKastranetsUCU/WCA_badges/commit/2ae2786)**  
+*(This commit contains the complete implementation: [`infra/reports.yml`](https://github.com/IhorKastranetsUCU/WCA_badges/blob/2ae2786/infra/reports.yml), [`backend/app/reports/weekly.py`](https://github.com/IhorKastranetsUCU/WCA_badges/blob/2ae2786/backend/app/reports/weekly.py), builder handler [`backend/app/reports/lambda_handler.py`](https://github.com/IhorKastranetsUCU/WCA_badges/blob/2ae2786/backend/app/reports/lambda_handler.py), mailer handler [`backend/app/reports/mailer.py`](https://github.com/IhorKastranetsUCU/WCA_badges/blob/2ae2786/backend/app/reports/mailer.py), and tests).*  
+*(Previous submission mistakenly referenced deployment commit [`624fe93`](https://github.com/IhorKastranetsUCU/WCA_badges/commit/624fe93), which only adjusted `.github/workflows/deploy.yml`).*  
 *(CI/CD Automated Deployment Run: [Deploy to AWS #38786144993 — Success ✅](https://github.com/IhorKastranetsUCU/WCA_badges/actions/runs/38786144993))*
 
 ---
@@ -39,11 +40,14 @@ aws s3 ls s3://wca-badges-reports-297580066889/reports/ --recursive
 ```
 Output:
 ```text
-2026-10-14 20:41:21        997 reports/2026-W39.csv
-2026-10-14 20:40:53        997 reports/2026-W41.csv
+2026-10-14 17:40:53        997 reports/2026-W41.csv
+2026-10-14 17:41:21        997 reports/2026-W39.csv
+2026-10-19 04:00:32        997 reports/2026-W42.csv
+2026-10-26 05:00:32        997 reports/2026-W43.csv
 ```
 * `reports/2026-W41.csv` was generated via **Schedule trigger** (`trigger=schedule`).
 * `reports/2026-W39.csv` was generated via **On-demand SQS queue trigger** (`make report-now WEEK=2026-W39`).
+* `reports/2026-W42.csv` and `reports/2026-W43.csv` were generated via **Weekly recurring EventBridge Scheduler** runs.
 
 ---
 

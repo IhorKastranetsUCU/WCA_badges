@@ -9,6 +9,7 @@ import { Canvas } from "@/components/editor/Canvas";
 import { RightPanel } from "@/components/editor/RightPanel";
 import { WcaImportModal } from "@/components/wca/WcaImportModal";
 import { WcaProfileModal } from "@/components/wca/WcaProfileModal";
+import { AuthModal } from "@/components/auth/AuthModal";
 import { AddCustomAttendeeModal } from "@/components/wca/AddCustomAttendeeModal";
 import { ExportPdfModal } from "@/components/editor/ExportPdfModal";
 import { PasteAgendaModal } from "@/components/agenda/PasteAgendaModal";
@@ -342,6 +343,8 @@ export const App: React.FC = () => {
   // Modals
   const [isWcaModalOpen, setIsWcaModalOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalTab, setAuthModalTab] = useState<"register" | "login">("register");
   const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isAgendaModalOpen, setIsAgendaModalOpen] = useState<boolean>(false);
@@ -1552,6 +1555,14 @@ export const App: React.FC = () => {
         onGoogleLogin={() => handleGoogleOAuthLogin()}
         isGoogleAuthenticating={isGoogleAuthenticating}
         onOpenAgendaModal={() => setIsAgendaModalOpen(true)}
+        onOpenRegisterModal={() => {
+          setAuthModalTab("register");
+          setIsAuthModalOpen(true);
+        }}
+        onOpenLoginModal={() => {
+          setAuthModalTab("login");
+          setIsAuthModalOpen(true);
+        }}
       />
 
       {/* Auth notification banners */}
@@ -1676,6 +1687,14 @@ export const App: React.FC = () => {
         onLinkWcaViaToken={handleLinkWcaViaToken}
         isGoogleAuthenticating={isGoogleAuthenticating}
         needsWcaLink={needsWcaLink}
+      />
+
+      {/* Cognito Email/Password & Registration Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialTab={authModalTab}
+        onLoginSuccess={handleLogin}
       />
 
       {/* WCA Competition Import Modal (Filtered by user roles: Approved, Pending, Cancelled) */}

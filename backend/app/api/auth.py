@@ -8,12 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
+from app.schemas.auth import (
+    AuthMessageResponse,
+    UserConfirmRequest,
+    UserLoginPasswordRequest,
+    UserRegisterRequest,
+    UserResendCodeRequest,
+)
 from app.schemas.wca import (
     GoogleAuthUrlResponse,
     GoogleCallbackRequest,
     LinkWcaRequest,
     WCAAuthResponse,
     WCAProfile,
+)
+from app.services.cognito_auth import (
+    confirm_cognito_registration,
+    login_cognito_password,
+    register_cognito_user,
+    resend_cognito_code,
 )
 from app.services.google_auth import (
     GOOGLE_PROFILE_CACHE,
@@ -47,6 +60,179 @@ async def get_auth_config():
         "cognito_user_pool_client_id": settings.COGNITO_USER_POOL_CLIENT_ID,
         "wca_client_id": settings.WCA_CLIENT_ID,
     }
+
+
+@router.post("/register", response_model=AuthMessageResponse)
+async def register_user(payload: UserRegisterRequest):
+    """
+    Registers a new user in AWS Cognito User Pool with email, login (username), and password.
+    Cognito automatically triggers sending an email confirmation code to the user's email address.
+    """
+    result = register_cognito_user(
+        username=payload.username,
+        email=payload.email,
+        password=payload.password,
+    )
+    return AuthMessageResponse(
+        status=result["status"],
+        message=result["message"],
+        email=result["email"],
+    )
+
+
+@router.post("/confirm", response_model=AuthMessageResponse)
+async def confirm_registration(
+    payload: UserConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Confirms user registration using the 6-digit confirmation code received by email.
+    Creates or activates user in the local database.
+    """
+    result = confirm_cognito_registration(
+        email=payload.email,
+        code=payload.code,
+    )
+    # Ensure user is recorded in database
+    clean_email = payload.email.strip().lower()
+    try:
+        stmt = select(User).where(User.email == clean_email)
+        res = await db.execute(stmt)
+        db_user = res.scalars().first()
+        if not db_user:
+            db_user = User(
+                id=str(uuid.uuid4()),
+                email=clean_email,
+                name=clean_email.split("@")[0],
+                auth_provider="cognito",
+            )
+            db.add(db_user)
+            await db.commit()
+    except Exception as e:
+        logger.warning("Could not persist confirmed cognito user in DB: %s", e)
+
+    return AuthMessageResponse(
+        status=result["status"],
+        message=result["message"],
+        email=result["email"],
+    )
+
+
+@router.post("/resend-code", response_model=AuthMessageResponse)
+async def resend_code(payload: UserResendCodeRequest):
+    """
+    Resends confirmation code to user's email address.
+    """
+    result = resend_cognito_code(email=payload.email)
+    return AuthMessageResponse(
+        status=result["status"],
+        message=result["message"],
+        email=result["email"],
+    )
+
+
+@router.post("/login-password", response_model=WCAAuthResponse)
+async def login_with_password(
+    payload: UserLoginPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Authenticates user with email and password via AWS Cognito.
+    Returns user profile, access token, and any linked WCA account.
+    """
+    auth_data = login_cognito_password(
+        email=payload.email,
+        password=payload.password,
+    )
+    email = auth_data["email"]
+    name = auth_data["name"]
+    sub = auth_data.get("sub", "")
+
+    # Look up or create user in database
+    db_user = None
+    try:
+        stmt = select(User).where(User.email == email)
+        res = await db.execute(stmt)
+        db_user = res.scalars().first()
+        if not db_user:
+            db_user = User(
+                id=str(uuid.uuid4()),
+                email=email,
+                name=name,
+                google_sub=sub,
+                auth_provider="cognito",
+            )
+            db.add(db_user)
+            await db.commit()
+            await db.refresh(db_user)
+        else:
+            if not db_user.name or db_user.name == email:
+                db_user.name = name
+            db_user.auth_provider = "cognito"
+            await db.commit()
+            await db.refresh(db_user)
+    except Exception as e:
+        logger.error("Database user lookup error in login_with_password: %s", e)
+
+    # Check linked WCA profile
+    linked_wca_id = (
+        (db_user.wca_id if db_user else None) or GOOGLE_WCA_LINKS.get(email) or ""
+    ).strip()
+
+    if linked_wca_id:
+        clean_wca_id = linked_wca_id.upper()
+        try:
+            wca_profile = await fetch_wca_me_profile(clean_wca_id)
+        except Exception:
+            if db_user and db_user.wca_profile_data:
+                wca_profile = WCAProfile(**db_user.wca_profile_data)
+            else:
+                wca_profile = WCAProfile(
+                    id=db_user.id if db_user else abs(hash(email)) % 10000000,
+                    wca_id=clean_wca_id,
+                    name=db_user.wca_name if db_user else name,
+                    avatar_url=db_user.wca_avatar_url if db_user else None,
+                    country_iso2="UA",
+                    email=email,
+                    auth_provider="cognito",
+                )
+        wca_profile.auth_provider = "cognito"
+        wca_profile.email = email
+        wca_profile.needs_wca_link = False
+
+        comps = await get_competitions_for_google_user(wca_profile, "")
+        token_str = encode_profile_token(wca_profile)
+        GOOGLE_PROFILE_CACHE[token_str] = wca_profile
+
+        return WCAAuthResponse(
+            access_token=token_str,
+            profile=wca_profile,
+            competitions=comps,
+            provider="cognito",
+            needs_wca_link=False,
+        )
+
+    # Not linked to WCA yet
+    unlinked_profile = WCAProfile(
+        id=db_user.id if db_user else abs(hash(email)) % 10000000,
+        wca_id=None,
+        name=db_user.name if db_user else name,
+        avatar_url=db_user.avatar_url if db_user else None,
+        country_iso2="UA",
+        email=email,
+        auth_provider="cognito",
+        needs_wca_link=True,
+    )
+    token_str = encode_profile_token(unlinked_profile)
+    GOOGLE_PROFILE_CACHE[token_str] = unlinked_profile
+
+    return WCAAuthResponse(
+        access_token=token_str,
+        profile=unlinked_profile,
+        competitions=[],
+        provider="cognito",
+        needs_wca_link=True,
+    )
 
 
 @router.get("/google/url", response_model=GoogleAuthUrlResponse)

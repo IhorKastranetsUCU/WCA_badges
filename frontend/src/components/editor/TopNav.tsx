@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Sparkles, Shield, LogOut, ExternalLink, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Download, Sparkles, Shield, LogOut, ExternalLink, RefreshCw, SlidersHorizontal, UserPlus, LogIn } from "lucide-react";
 import { WCAProfile } from "@/types/wca";
 
 interface TopNavProps {
@@ -15,6 +15,8 @@ interface TopNavProps {
   onGoogleLogin: () => void;
   isGoogleAuthenticating?: boolean;
   onOpenAgendaModal?: () => void;
+  onOpenRegisterModal?: () => void;
+  onOpenLoginModal?: () => void;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -30,6 +32,8 @@ export const TopNav: React.FC<TopNavProps> = ({
   onGoogleLogin,
   isGoogleAuthenticating = false,
   onOpenAgendaModal,
+  onOpenRegisterModal,
+  onOpenLoginModal,
 }) => {
   const isGoogle = wcaProfile?.auth_provider === "google";
   return (
@@ -138,16 +142,31 @@ export const TopNav: React.FC<TopNavProps> = ({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            {/* Cognito Sign In Button (Redirects to /login/ -> Cognito Hosted UI) */}
-            <a
-              href="/login/"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:bg-black text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
-              title="Sign in with Email/Password or Google via Amazon Cognito"
+            {/* 1. Register Button (Реєстрація) */}
+            <button
+              type="button"
+              onClick={onOpenRegisterModal}
+              title="Реєстрація нового користувача за логіном, імейлом і паролем"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold shadow-sm shadow-emerald-600/20 transition-all cursor-pointer"
             >
-              <span>Cognito Sign In</span>
-            </a>
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Реєстрація</span>
+            </button>
 
-            {/* 1. Sign In with WCA */}
+            {/* 2. Login Button (Вхід за паролем) */}
+            <button
+              type="button"
+              onClick={onOpenLoginModal}
+              title="Увійти за імейлом та паролем"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:bg-black text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Вхід</span>
+            </button>
+
+            <div className="h-4 w-px bg-slate-200 mx-0.5"></div>
+
+            {/* 3. Sign In with WCA */}
             <button
               type="button"
               onClick={onWcaLogin}
