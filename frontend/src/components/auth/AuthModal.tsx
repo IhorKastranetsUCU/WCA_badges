@@ -163,9 +163,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           });
           const loginData = await loginRes.json();
           if (loginRes.ok && loginData.access_token && loginData.profile) {
+            const cognitoProfile: WCAProfile = {
+              ...loginData.profile,
+              auth_provider: loginData.profile.auth_provider || "cognito",
+            };
             onLoginSuccess(
               loginData.access_token,
-              loginData.profile,
+              cognitoProfile,
               loginData.competitions || []
             );
             onClose();
@@ -255,9 +259,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       if (data.access_token && data.profile) {
+        const cognitoProfile: WCAProfile = {
+          ...data.profile,
+          auth_provider: data.profile.auth_provider || "cognito",
+        };
         onLoginSuccess(
           data.access_token,
-          data.profile,
+          cognitoProfile,
           data.competitions || []
         );
         onClose();

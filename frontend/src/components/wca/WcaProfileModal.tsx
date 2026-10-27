@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, LogOut, Shield, Check, ExternalLink, Sparkles, Link2 } from "lucide-react";
+import { X, LogOut, Shield, Check, ExternalLink, Sparkles, Link2, User, UserCheck, ShieldCheck, Mail } from "lucide-react";
 import { WCAProfile, WCACompetition } from "@/types/wca";
 import { getApiUrl } from "@/api/config";
 
@@ -17,6 +17,8 @@ interface WcaProfileModalProps {
   onLinkWcaViaToken?: (token: string) => Promise<void>;
   isGoogleAuthenticating?: boolean;
   needsWcaLink?: boolean;
+  onOpenRegisterModal?: () => void;
+  onOpenLoginModal?: () => void;
 }
 
 export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
@@ -33,6 +35,8 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
   onLinkWcaViaToken,
   isGoogleAuthenticating = false,
   needsWcaLink = false,
+  onOpenRegisterModal,
+  onOpenLoginModal,
 }) => {
   const [personalToken, setPersonalToken] = useState("");
   const [oauthCode, setOauthCode] = useState("");
@@ -49,6 +53,19 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
   if (!isOpen) return null;
 
   const isGoogleUser = profile?.auth_provider === "google";
+  const isCognitoUser =
+    profile?.auth_provider === "cognito" ||
+    profile?.auth_provider === "email" ||
+    (Boolean(profile?.email) && profile?.auth_provider !== "google" && profile?.auth_provider !== "wca");
+
+  const getUserInitials = (name?: string | null) => {
+    if (!name) return "U";
+    const parts = name.trim().split(/[\s@._-]+/).filter(Boolean);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
 
   const handleTokenConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,11 +213,19 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-slate-800">
-                {profile ? (isGoogleUser ? "Google & WCA Profile" : "WCA Account Profile") : "Sign In & Registration"}
+                {profile
+                  ? isGoogleUser
+                    ? "Google & WCA Profile"
+                    : isCognitoUser
+                    ? "User Account & WCA Profile"
+                    : "WCA Account Profile"
+                  : "Sign In & Registration"}
               </h2>
               <p className="text-[11px] text-slate-400">
                 {profile
-                  ? "Manage your connected account and official badge generator permissions"
+                  ? isCognitoUser
+                    ? "Manage your registered user account, security, and WCA profile connection"
+                    : "Manage your connected account and official badge generator permissions"
                   : "Choose your preferred authentication method to get started"}
               </p>
             </div>
@@ -220,12 +245,26 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
             {/* User Profile Info Card */}
             <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 space-y-3">
               <div className="flex items-center gap-4">
-                <div className="relative">
-                  <img
-                    src={profile.avatar_url || "https://avatars.githubusercontent.com/u/45145803?v=4"}
-                    alt={profile.name}
-                    className="w-14 h-14 rounded-full border-2 border-white shadow-md object-cover"
-                  />
+                <div className="relative flex-shrink-0">
+                  {profile.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt={profile.name}
+                      className="w-14 h-14 rounded-full border-2 border-white shadow-md object-cover"
+                    />
+                  ) : isCognitoUser ? (
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-black text-xl flex items-center justify-center border-2 border-white shadow-md select-none" title="Email User">
+                      <Mail className="w-6 h-6 text-white" />
+                    </div>
+                  ) : (
+                    <img
+                      src="https://avatars.githubusercontent.com/u/45145803?v=4"
+                      alt={profile.name}
+                      className="w-14 h-14 rounded-full border-2 border-white shadow-md object-cover"
+                    />
+                  )}
+
+                  {/* Badge icon for Google auth */}
                   {isGoogleUser && (
                     <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-xs border border-slate-200" title="Google Authentication">
                       <svg className="w-2.5 h-2.5" viewBox="0 0 24 24">
@@ -234,6 +273,13 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                       </svg>
+                    </span>
+                  )}
+
+                  {/* Badge icon for Email auth */}
+                  {isCognitoUser && (
+                    <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xs border border-white" title="Signed in with Email">
+                      <Mail className="w-2.5 h-2.5 text-white stroke-[2.5]" />
                     </span>
                   )}
                 </div>
@@ -269,15 +315,57 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
                         Organizer
                       </span>
                     )}
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200/70 text-slate-700">
-                      {isGoogleUser ? "Auth: Google" : "Auth: WCA Direct"}
-                    </span>
+                    {isGoogleUser ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1">
+                        <svg className="w-3 h-3" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                        </svg>
+                        <span>Google Auth</span>
+                      </span>
+                    ) : isCognitoUser ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-indigo-600" />
+                        <span>Email Auth</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200/70 text-slate-700">
+                        Auth: WCA Direct
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Link / Change WCA Account section for Google users */}
-              {isGoogleUser && (
+              {/* Dedicated Created Account Credentials Badge */}
+              {isCognitoUser && (
+                <div className="p-3 bg-white/90 rounded-xl border border-indigo-200 shadow-xs space-y-1">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                    <span className="flex items-center gap-1.5 text-indigo-700">
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>Email Account Credentials</span>
+                    </span>
+                    <span className="text-[9px] uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      Email & Password
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Username / Login</span>
+                      <span className="font-semibold text-slate-800 font-mono truncate block">{profile.name}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Verified Email</span>
+                      <span className="font-semibold text-slate-800 truncate block">{profile.email || "—"}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Link / Change WCA Account section for Google and Cognito users */}
+              {(isGoogleUser || isCognitoUser) && (
                 <div className="pt-3 border-t border-blue-200/60 space-y-3">
                   {/* Prominent prompt when WCA link is needed */}
                   {(needsWcaLink || !profile.wca_id) && (
@@ -287,7 +375,7 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
                         <span>Connect your WCA Account</span>
                       </div>
                       <p className="text-[11px] text-amber-700">
-                        Link your World Cube Association profile to access your competitions, badges, and official competitor data.
+                        Link your official World Cube Association profile to access your competitions, badges, and delegate permissions directly inside your account ({profile.email}).
                       </p>
                     </div>
                   )}
@@ -631,6 +719,41 @@ export const WcaProfileModal: React.FC<WcaProfileModalProps> = ({
                 </button>
               </form>
             )}
+
+            {/* Email & Password Registration/Login alternative callout */}
+            <div className="pt-2 border-t border-slate-200">
+              <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-xl flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Prefer Email & Password?</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-800">
+                    Create an account or log in with credentials directly.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {onOpenRegisterModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenRegisterModal}
+                      className="px-2.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition-colors cursor-pointer"
+                    >
+                      Реєстрація
+                    </button>
+                  )}
+                  {onOpenLoginModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenLoginModal}
+                      className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-xs transition-colors cursor-pointer"
+                    >
+                      Вхід
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

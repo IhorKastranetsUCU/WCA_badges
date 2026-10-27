@@ -8,7 +8,7 @@ export interface WCAProfile {
   is_delegate: boolean;
   is_organizer: boolean;
   email?: string | null;
-  auth_provider?: "wca" | "google" | string;
+  auth_provider?: "wca" | "google" | "cognito" | "email" | string;
   needs_wca_link?: boolean;
 }
 

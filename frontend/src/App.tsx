@@ -1687,6 +1687,16 @@ export const App: React.FC = () => {
         onLinkWcaViaToken={handleLinkWcaViaToken}
         isGoogleAuthenticating={isGoogleAuthenticating}
         needsWcaLink={needsWcaLink}
+        onOpenRegisterModal={() => {
+          setIsProfileModalOpen(false);
+          setAuthModalTab("register");
+          setIsAuthModalOpen(true);
+        }}
+        onOpenLoginModal={() => {
+          setIsProfileModalOpen(false);
+          setAuthModalTab("login");
+          setIsAuthModalOpen(true);
+        }}
       />
 
       {/* Cognito Email/Password & Registration Modal */}
