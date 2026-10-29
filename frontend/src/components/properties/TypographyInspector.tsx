@@ -1,6 +1,6 @@
 import React from "react";
 import { AlignLeft, AlignCenter, AlignRight, Italic, Type } from "lucide-react";
-import { ElementStyle, ElementType, FormatMode, NameDisplayMode } from "@/types/badge";
+import { ElementStyle, ElementType, FormatMode, NameDisplayMode, SUPPORTED_FONT_FAMILIES } from "@/types/badge";
 
 interface TypographyInspectorProps {
   elementType: ElementType;
@@ -16,7 +16,7 @@ interface TypographyInspectorProps {
   onChangeFormatSuffix?: (suffix: string) => void;
 }
 
-const FONT_FAMILIES = ["Inter", "Roboto", "DejaVu Sans", "Montserrat", "Open Sans", "Arial", "Impact", "Georgia"];
+const FONT_FAMILIES = SUPPORTED_FONT_FAMILIES;
 const FONT_WEIGHTS = [
   { label: "Regular (400)", value: "400" },
   { label: "Medium (500)", value: "500" },

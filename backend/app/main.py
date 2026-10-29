@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text
 
+from app.api.ai import router as ai_router
 from app.api.auth import router as auth_router
 from app.api.badges import router as badges_router
 from app.api.competitors import router as competitors_router
@@ -24,6 +25,12 @@ async def lifespan(app: FastAPI):
             try:
                 await conn.execute(
                     text("ALTER TABLE competitors ADD COLUMN IF NOT EXISTS avatar_url TEXT;")
+                )
+            except Exception:
+                pass
+            try:
+                await conn.execute(
+                    text("ALTER TABLE badge_templates ADD COLUMN IF NOT EXISTS ai_suggestion JSON;")
                 )
             except Exception:
                 pass
@@ -94,3 +101,4 @@ app.include_router(badges_router, prefix="/api")
 app.include_router(wca_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(meetings_router, prefix="/api")
+app.include_router(ai_router, prefix="/api")

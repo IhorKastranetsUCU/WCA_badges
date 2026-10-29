@@ -125,16 +125,54 @@ def _ensure_fonts_registered():
     _FONTS_REGISTERED = True
 
 
-def get_pdf_font(family: str | None = None, is_bold: bool = False) -> str:
+def get_pdf_font(
+    family: str | None = None,
+    is_bold: bool = False,
+    is_italic: bool = False,
+    text_sample: str = "",
+) -> str:
     _ensure_fonts_registered()
-    fam = (family or "").lower()
+    fam = (family or "").strip().lower()
     reg_fonts = pdfmetrics.getRegisteredFontNames()
-    if "Roboto" in reg_fonts and "roboto" in fam:
+    is_ascii_latin = all(ord(ch) <= 255 for ch in (text_sample or ""))
+
+    # Built-in Type1 Serif mapping (Playfair Display / Georgia) when text is Latin-1 compatible
+    if is_ascii_latin and fam in ("playfair display", "georgia", "serif", "times", "times new roman"):
+        if is_bold and is_italic:
+            return "Times-BoldItalic"
+        if is_bold:
+            return "Times-Bold"
+        if is_italic:
+            return "Times-Italic"
+        return "Times-Roman"
+
+    # Built-in Type1 Monospace mapping (JetBrains Mono) when text is Latin-1 compatible
+    if is_ascii_latin and ("mono" in fam or "courier" in fam):
+        if is_bold and is_italic:
+            return "Courier-BoldOblique"
+        if is_bold:
+            return "Courier-Bold"
+        if is_italic:
+            return "Courier-Oblique"
+        return "Courier"
+
+    if "DejaVuSans" in reg_fonts and ("dejavu" in fam or "mono" in fam):
+        return "DejaVuSans-Bold" if is_bold else "DejaVuSans"
+    if "Roboto" in reg_fonts and fam in ("roboto", "oswald", "impact"):
         return "Roboto-Bold" if is_bold else "Roboto"
     if "Inter" in reg_fonts and (
         not fam
         or "inter" in fam
-        or fam in ["sans-serif", "system-ui", "arial", "helvetica", "montserrat", "open sans"]
+        or fam in (
+            "sans-serif",
+            "system-ui",
+            "arial",
+            "helvetica",
+            "montserrat",
+            "open sans",
+            "playfair display",
+            "georgia",
+        )
     ):
         return "Inter-Bold" if is_bold else "Inter"
     if "DejaVuSans" in reg_fonts:
@@ -806,10 +844,17 @@ def draw_badge_contents(
             c.setFillColor(hex_to_color(bg_hex, "#2563EB"))
             radius_mm = float(role_style.get("border_radius", 4.0))
             radius_pt = min(radius_mm * mm, min(pt_w, pt_h) / 2.0)
+            role_bw = float(role_style.get("border_width", 0.0) or 0.0)
+            has_role_stroke = role_bw > 0
+            if has_role_stroke:
+                c.setStrokeColor(hex_to_color(role_style.get("border_color", "#000000")))
+                c.setLineWidth(role_bw)
             if radius_pt > 0:
-                c.roundRect(pt_x, pt_y, pt_w, pt_h, radius_pt, fill=1, stroke=0)
+                c.roundRect(
+                    pt_x, pt_y, pt_w, pt_h, radius_pt, fill=1, stroke=1 if has_role_stroke else 0
+                )
             else:
-                c.rect(pt_x, pt_y, pt_w, pt_h, fill=1, stroke=0)
+                c.rect(pt_x, pt_y, pt_w, pt_h, fill=1, stroke=1 if has_role_stroke else 0)
         elif style.get("has_background", False):
             bg_color = hex_to_color(style.get("background_color", "#FFFFFF"))
             c.setFillColor(bg_color)
@@ -988,7 +1033,12 @@ def draw_badge_contents(
             text_content = text_content.upper()
 
         is_bold = str(font_weight) in ["700", "800", "bold"]
-        font_name = get_pdf_font(font_family, is_bold)
+        is_italic = bool(
+            role_style.get("italic", False) if elem_type == "role" else style.get("italic", False)
+        )
+        font_name = get_pdf_font(
+            font_family, is_bold=is_bold, is_italic=is_italic, text_sample=text_content
+        )
 
         c.setFont(font_name, font_size)
         c.setFillColor(text_color)
@@ -1248,7 +1298,11 @@ def render_badges_pdf(
                 origin_y = margin_y_pt + ((rows - 1 - row) * cell_h_pt)
 
                 role_id = comp.get("role_id")
-                role_data = roles.get(role_id, {}) if role_id else {}
+                default_role = next(
+                    (r for r in roles.values() if r.get("is_default")),
+                    next(iter(roles.values()), {}),
+                )
+                role_data = roles.get(role_id, default_role) if role_id else default_role
 
                 # Rotation angle for badge within cell:
                 # If packing rotated by 90°:

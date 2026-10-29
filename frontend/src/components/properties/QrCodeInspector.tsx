@@ -1,6 +1,6 @@
 import React from "react";
 import { Plus, QrCode } from "lucide-react";
-import { BadgeDimensions, ElementPosition } from "@/types/badge";
+import { BadgeDimensions, ElementPosition, SUPPORTED_FONT_FAMILIES } from "@/types/badge";
 import { PositionInspector } from "./PositionInspector";
 
 interface QrCodeInspectorProps {
@@ -37,7 +37,7 @@ const PRESET_URLS = [
   { label: "WCA Website", url: "https://www.worldcubeassociation.org" },
 ];
 
-const FONT_FAMILIES = ["Inter", "Roboto", "DejaVu Sans", "Montserrat", "Arial", "Impact"];
+const FONT_FAMILIES = SUPPORTED_FONT_FAMILIES;
 
 export const QrCodeInspector: React.FC<QrCodeInspectorProps> = ({
   position,

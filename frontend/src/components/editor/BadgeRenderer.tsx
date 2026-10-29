@@ -22,6 +22,7 @@ export interface BadgeRendererProps {
   onStartDrag?: (elemId: string, e: React.MouseEvent) => void;
   onStartResize?: (elemId: string, handle: string, e: React.MouseEvent) => void;
   scheduleData?: any;
+  aiSuggestedElementIds?: Set<string>;
 }
 
 function getFittedFontSizePx(
@@ -63,13 +64,19 @@ export const BadgeRenderer: React.FC<BadgeRendererProps> = ({
   onStartDrag,
   onStartResize,
   scheduleData,
+  aiSuggestedElementIds,
 }) => {
   const badgeWidthPx = dimensions.width_mm * scale;
   const badgeHeightPx = dimensions.height_mm * scale;
 
+  const defaultRoleFromMap = rolesMap
+    ? Array.from(rolesMap.values()).find((r) => r.is_default) ||
+      Array.from(rolesMap.values())[0]
+    : undefined;
   const compRole =
     role ||
-    (competitor?.role_id && rolesMap ? rolesMap.get(competitor.role_id) : undefined);
+    (competitor?.role_id && rolesMap ? rolesMap.get(competitor.role_id) : undefined) ||
+    defaultRoleFromMap;
   const roleName = compRole?.name || "Participant";
   const roleStyle = compRole?.style;
 
@@ -96,6 +103,7 @@ export const BadgeRenderer: React.FC<BadgeRendererProps> = ({
         .sort((a, b) => a.position.z_index - b.position.z_index)
         .map((elem) => {
           const isSelected = isInteractive && selectedElementId === elem.id;
+          const isAiSuggested = Boolean(isInteractive && aiSuggestedElementIds?.has(elem.id));
           const pos = elem.position;
           const style = elem.style;
 
@@ -221,12 +229,16 @@ export const BadgeRenderer: React.FC<BadgeRendererProps> = ({
                 borderWidth:
                   elem.type === "avatar" && elem.border_width_mm
                     ? `${elem.border_width_mm * scale}px`
+                    : elem.type === "role" && roleStyle?.border_width && roleStyle.border_width > 0
+                    ? `${roleStyle.border_width}px`
                     : style?.has_background && style.border_width > 0
                     ? `${style.border_width}px`
                     : undefined,
                 borderColor:
                   elem.type === "avatar" && elem.border_color
                     ? elem.border_color
+                    : elem.type === "role" && roleStyle?.border_color
+                    ? roleStyle.border_color
                     : style?.has_background
                     ? style.border_color
                     : undefined,
@@ -235,10 +247,20 @@ export const BadgeRenderer: React.FC<BadgeRendererProps> = ({
                 isInteractive
                   ? isSelected
                     ? "ring-2 ring-blue-500 ring-offset-1 cursor-move"
+                    : isAiSuggested
+                    ? "ring-1 ring-violet-500/80 hover:ring-2 hover:ring-violet-500 cursor-move"
                     : "hover:ring-1 hover:ring-blue-300 cursor-move"
                   : "pointer-events-none"
               }`}
             >
+              {isAiSuggested && (
+                <span
+                  title="AI Suggested placement — drag or edit to customize"
+                  className="absolute -top-4 right-0 z-40 px-1.5 py-0.5 rounded bg-violet-600 text-white text-[8px] font-bold leading-none shadow-sm pointer-events-none tracking-wide"
+                >
+                  ✨ AI
+                </span>
+              )}
               {elem.type === "flag" ? (
                 <div className="w-full h-full pointer-events-none overflow-hidden">
                   <CountryFlag iso2={competitor?.country_iso2 || "UA"} opacity={elem.opacity} />

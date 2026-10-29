@@ -31,8 +31,11 @@ frontend/dist/
 
 # Environment & Secrets
 .env
-.env.local
-.env.*.local
+**/.env
+.env.*
+**/.env.*
+!frontend/.env.production
+!.env.example
 *.json.local
 backend/app/services/google_wca_links.json
 

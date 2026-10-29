@@ -16,6 +16,17 @@ Parameters:
     Default: anthropic.claude-opus-5-5
     Description: Amazon Bedrock model ID for agenda parsing
 
+  LayoutModel:
+    Type: String
+    Default: gemini-3-flash-preview
+    Description: Multimodal Vision model ID for AI badge auto-layout
+
+  GeminiApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Optional Gemini API key (masked via NoEcho; falls back to Bedrock if empty)
+
   CognitoUserPoolId:
     Type: String
     Default: us-east-1_T7FaZwE2p
@@ -81,6 +92,9 @@ Resources:
           ENVIRONMENT: production
           PROJECT_NAME: !Ref ProjectName
           PARSER_MODEL: !Ref ParserModel
+          LAYOUT_MODEL: !Ref LayoutModel
+          GEMINI_MODEL: !Ref LayoutModel
+          GEMINI_API_KEY: !Ref GeminiApiKey
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
           COGNITO_REGION: !Ref AWS::Region
           CORS_ORIGINS: !Sub '${FrontendUrl},http://localhost:5173,*'

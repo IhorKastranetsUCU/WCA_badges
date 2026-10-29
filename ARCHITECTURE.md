@@ -28,6 +28,7 @@ flowchart TD
     subgraph Client["Frontend Client (React + Vite + Tailwind)"]
         UI["Web UI: Figma-like Badge Studio"]
         Canvas["Interactive SVG/HTML5 Canvas"]
+        AILayout["AI Auto-Layout Vision Framing"]
         AIModal["AI Agenda Parser Modal"]
         WcaAuth["WCA / Cognito Sign-in"]
     end
@@ -41,6 +42,7 @@ flowchart TD
         Router["FastAPI HTTP Router"]
         PDFGen["ReportLab PDF Generator"]
         CSVParser["WCA CSV / Name Parser"]
+        LayoutAI["Multimodal Badge Auto-Layout Engine"]
         AIEngine["AI Agenda Parser Service"]
         ReportEngine["Weekly Analytics Reporter"]
     end
@@ -52,7 +54,8 @@ flowchart TD
 
     subgraph External["External Services & APIs"]
         WCA["World Cube Association API (OAuth2 + WCIF)"]
-        Bedrock["Amazon Bedrock (Claude 3.5 Sonnet / Titan)"]
+        Gemini["Google Gemini Vision API (gemini-3-flash)"]
+        Bedrock["Amazon Bedrock (Claude / Nova)"]
         Cognito["Amazon Cognito (User Pool + Google Federation)"]
         SES["Amazon SES (Email Service)"]
         EventBridge["Amazon EventBridge (Weekly Scheduler)"]
@@ -60,13 +63,17 @@ flowchart TD
     end
 
     UI --> WcaAuth
+    UI --> AILayout
     CF --> S3Front
     UI <--> Router
+    AILayout <--> LayoutAI
     WcaAuth <--> Cognito
     WcaAuth <--> WCA
     Router <--> Postgres
     Alembic --> Postgres
     Router <--> WCA
+    LayoutAI <--> Gemini
+    LayoutAI <--> Bedrock
     AIEngine <--> Bedrock
     ReportEngine <--> EventBridge
     ReportEngine <--> SQS
@@ -155,10 +162,10 @@ The frontend is built with **React 18**, **Vite**, **TypeScript**, and styled wi
   * **WCA Integration:** Live competition selector with category badges (🟢 Approved, 🟡 Pending, 🔴 Cancelled).
   * **Manual Attendee Creation:** Modal to add custom badges for VIPs, parents, or staff not on the WCA roster.
   * **Badge Dimensions:** Standard A6 (`105 x 148 mm`), `100 x 70 mm`, `90 x 70 mm`, or custom dimensions.
-  * **Artwork Upload:** Drag & drop background templates (PNG, JPG, SVG).
+  * **Artwork Upload & AI Auto-Layout:** Drag & drop background templates (PNG, JPG, SVG) with one-click **✨ AI Auto-Layout** powered by Multimodal Gemini Vision (with accessible indeterminate spinner, `Cancel` via `AbortController`, and optional layout hint input).
   * **Participant Carousel:** Step through each attendee to preview their live personalized badge.
 * **Interactive Canvas (`src/components/editor/Canvas.tsx`)**:
-  * Real-time Figma-like WYSIWYG editor.
+  * Real-time Figma-like WYSIWYG editor with human-in-the-loop AI layout review banner (`Undo`, `Save Layout`, `✨ AI` suggested badges on untouched elements).
   * Precise millimeter-to-screen pixel conversion (`96 DPI` preview, scaled dynamically).
   * Draggable, resizable bounding boxes with transform handles for:
     * Competitor Full Name (with automatic Cyrillic/Latin splitting).
@@ -185,16 +192,19 @@ The backend is a high-performance **FastAPI** application structured around clea
 ```text
 backend/app/
 ├── api/            # HTTP Route Handlers (FastAPI Routers)
+│   ├── ai.py           # Multimodal AI badge auto-layout route (POST /api/ai/badge-layout)
 │   ├── auth.py         # Cognito & session verification
-│   ├── badges.py       # Layout template CRUD & PDF compilation endpoints
+│   ├── badges.py       # Layout template CRUD (with ai_suggestion tracking) & PDF endpoints
 │   ├── competitors.py  # CSV ingestion & attendee management
 │   ├── meetings.py     # Meeting agenda CRUD & AI parsing routes
 │   ├── roles.py        # Custom roles & styling configurations
 │   └── wca.py          # WCA OAuth2 handshake & API proxies
 ├── ai/             # GenAI Integration (Lab 6)
 │   ├── agenda.py       # Amazon Bedrock client & JSON extraction logic
-│   ├── agenda_lambda.py# Standalone AWS Lambda handler for Bedrock Function URL
-│   └── cli.py          # Command-line interface for testing agenda parsing
+│   ├── agenda_lambda.py# Standalone AWS Lambda handler (Agenda + Badge Auto-Layout)
+│   ├── badge_layout.py # Multimodal Gemini Vision / Bedrock badge auto-layout engine
+│   ├── cli.py          # Command-line interface for testing agenda parsing
+│   └── layout_cli.py   # Command-line interface for testing badge auto-layout
 ├── core/           # Infrastructure & Application Core
 │   ├── config.py       # Pydantic Settings reading environment variables
 │   └── database.py     # SQLAlchemy 2.0 async engine & session maker
@@ -345,6 +355,8 @@ The `Makefile` standardizes all common operations:
 
 | Date | Milestone / Lab | Key Changes Introduced | Impacted Components |
 | :--- | :--- | :--- | :--- |
+| **Oct 2026** | **AI Badge Brand Palette & Typography Matching** | Upgraded AI Badge Auto-Layout (v2) with Pillow median-cut palette extraction, smart typography pairing (Playfair Display, Oswald, Montserrat, JetBrains Mono), brand-tinted contrast preservation, and automatic Role/QR/Avatar styling. | `backend/app/ai/badge_layout.py, backend/app/services/pdf_generator.py, frontend/src/App.tsx, frontend/src/components/editor/Canvas.tsx, frontend/src/components/editor/BadgeRenderer.tsx` |
+| **Oct 2026** | **Multimodal AI Badge Auto-Layout** | Added Gemini Vision multimodal badge auto-layout engine with 5x5 luminance contrast safety, LeftPanel trigger with accessible progress spinner and cancel support, Canvas human-in-the-loop review banner with Undo/Save, and PostgreSQL ai_suggestion tracking. | `backend/app/ai/badge_layout.py, backend/app/api/ai.py, frontend/src/components/editor/LeftPanel.tsx, frontend/src/components/editor/Canvas.tsx, docs/adr/0007-ai-badge-auto-layout.md` |
 | **Oct 2026** | **Auth Provider Specific Icons** | Updated TopNav and WcaProfileModal to display distinct icons for Email authentication (Mail envelope icon) versus Google authentication (Google G logo) across avatar badges and provider tags. | `frontend/src/components/editor/TopNav.tsx, frontend/src/components/wca/WcaProfileModal.tsx` |
 | **Oct 2026** | **Frontend Custom Account Distinction** | Enhanced frontend presentation for registered accounts (Cognito email/password vs Google OAuth), adding custom initials avatars, verified account badges, separate profile cards, and unified WCA profile linking. | `frontend/src/components/editor/TopNav.tsx, frontend/src/components/wca/WcaProfileModal.tsx, frontend/src/types/wca.ts` |
 | **Oct 2026** | **Lab Files Structuring** | Organized all lab-specific task sheets, discussion notes, and submission reports into dedicated subdirectories (labs/lab3, labs/lab5, labs/lab6) with a unified lab index. | `labs/` |

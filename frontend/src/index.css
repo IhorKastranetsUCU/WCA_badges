@@ -81,3 +81,107 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Accessible indeterminate <progress> spinner (Modern Web Guidance) */
+@property --arc-start {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@property --arc-end {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@property --progress-dash-animation {
+  syntax: "*";
+  inherits: false;
+  initial-value: , ai-progress-dash 2.8s ease-in-out infinite;
+}
+
+progress.ai-loading-spinner:indeterminate::-webkit-progress-bar,
+progress.ai-loading-spinner:indeterminate::-webkit-progress-value,
+progress.ai-loading-spinner:indeterminate::-moz-progress-bar {
+  display: none;
+  background: none;
+}
+
+progress.ai-loading-spinner:indeterminate {
+  --_from: calc(90deg + var(--arc-start, 0deg));
+  --_to: calc(90deg + var(--arc-end, 158deg));
+  --size: 16px;
+  --thickness: 2.2px;
+  --spinner-color: #ffffff;
+  --track-color: rgba(255, 255, 255, 0.28);
+  --spinner-duration: 1.2s;
+  --_used-spinner-duration: var(--spinner-duration);
+
+  display: inline-block;
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  appearance: none;
+  flex-shrink: 0;
+  background: conic-gradient(
+      from var(--_from),
+      var(--spinner-color) calc(var(--_to) - var(--_from)),
+      transparent 0
+    )
+    var(--track-color);
+  animation:
+    ai-progress-spin var(--_used-spinner-duration) linear infinite
+    var(--progress-dash-animation, );
+}
+
+@supports (background-clip: border-area) {
+  progress.ai-loading-spinner:indeterminate {
+    background-clip: border-area;
+    border: var(--thickness) solid transparent;
+    background-origin: border-box;
+  }
+}
+
+@supports not (background-clip: border-area) {
+  progress.ai-loading-spinner:indeterminate {
+    --clip-boundary: calc(100% - var(--thickness));
+    mask-image: radial-gradient(
+      farthest-side,
+      transparent var(--clip-boundary),
+      black var(--clip-boundary)
+    );
+    -webkit-mask-image: radial-gradient(
+      farthest-side,
+      transparent var(--clip-boundary),
+      black var(--clip-boundary)
+    );
+    border: 0;
+  }
+}
+
+@keyframes ai-progress-spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
+@keyframes ai-progress-dash {
+  from {
+    --arc-start: 0deg;
+    --arc-end: 12deg;
+  }
+  50% {
+    --arc-start: 100deg;
+    --arc-end: 340deg;
+  }
+  to {
+    --arc-start: 360deg;
+    --arc-end: 372deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  progress.ai-loading-spinner:indeterminate {
+    --_used-spinner-duration: 6s;
+  }
+}

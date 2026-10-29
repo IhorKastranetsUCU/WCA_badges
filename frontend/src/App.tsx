@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { RefreshCw, AlertCircle, X } from "lucide-react";
-import { BadgeDimensions, BadgeElement, BadgeTemplate } from "@/types/badge";
+import { BadgeDimensions, BadgeElement, BadgeLayoutResponse, BadgeTemplate } from "@/types/badge";
 import { Competitor, Role, RoleStyle } from "@/types/competitor";
 import { WCAProfile, WCACompetition } from "@/types/wca";
 import { TopNav } from "@/components/editor/TopNav";
 import { LeftPanel } from "@/components/editor/LeftPanel";
-import { Canvas } from "@/components/editor/Canvas";
+import { AiLayoutBannerMeta, Canvas } from "@/components/editor/Canvas";
 import { RightPanel } from "@/components/editor/RightPanel";
 import { WcaImportModal } from "@/components/wca/WcaImportModal";
 import { WcaProfileModal } from "@/components/wca/WcaProfileModal";
@@ -16,7 +16,7 @@ import { PasteAgendaModal } from "@/components/agenda/PasteAgendaModal";
 import { parseClientCsv } from "@/utils/csvParser";
 import { exportBadges } from "@/utils/pdfExport";
 import { readFileAndCompress } from "@/utils/imageUtils";
-import { getApiUrl } from "@/api/config";
+import { AI_PARSER_URL, getApiUrl } from "@/api/config";
 
 const INITIAL_ROLES: Role[] = [
   {
@@ -351,6 +351,20 @@ export const App: React.FC = () => {
   const [competitionSchedule, setCompetitionSchedule] = useState<any>(null);
   const [isUploadingAssignments, setIsUploadingAssignments] = useState<boolean>(false);
   const [assignmentStatusMessage, setAssignmentStatusMessage] = useState<string | null>(null);
+
+  // AI Multimodal Badge Auto-Layout State
+  const [isAutoLayoutRunning, setIsAutoLayoutRunning] = useState<boolean>(false);
+  const [autoLayoutError, setAutoLayoutError] = useState<string | null>(null);
+  const [aiSuggestedElementIds, setAiSuggestedElementIds] = useState<Set<string>>(new Set());
+  const [aiLayoutMeta, setAiLayoutMeta] = useState<AiLayoutBannerMeta | null>(null);
+  const [preAiElementsSnapshot, setPreAiElementsSnapshot] = useState<{
+    side: "front" | "back";
+    elements: BadgeElement[];
+    roles: Role[];
+  } | null>(null);
+  const [lastRawAiSuggestion, setLastRawAiSuggestion] = useState<Record<string, any> | null>(null);
+  const [isSavingLayout, setIsSavingLayout] = useState<boolean>(false);
+  const autoLayoutAbortRef = useRef<AbortController | null>(null);
 
   // Direct WCA OAuth login trigger
   const handleWcaOAuthLogin = async () => {
@@ -890,10 +904,21 @@ export const App: React.FC = () => {
     }
   };
 
+  const markElementTouchedByHuman = (id: string) => {
+    setAiSuggestedElementIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setAiLayoutMeta((prev) => (prev ? { ...prev, saved: false } : null));
+  };
+
   const handleUpdateElementPosition = (
     id: string,
     patch: { x_mm: number; y_mm: number; width_mm: number; height_mm: number }
   ) => {
+    markElementTouchedByHuman(id);
     setTemplate((prev) => {
       const side = prev.sides[currentSide];
       return {
@@ -1150,6 +1175,7 @@ export const App: React.FC = () => {
 
   const handleUpdateElement = (patch: Partial<BadgeElement>) => {
     if (!selectedElementId) return;
+    markElementTouchedByHuman(selectedElementId);
     setTemplate((prev) => {
       const side = prev.sides[currentSide];
       return {
@@ -1370,10 +1396,390 @@ export const App: React.FC = () => {
             },
           },
         }));
+        setAutoLayoutError(null);
       };
       img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleClearBackground = () => {
+    setTemplate((prev) => ({
+      ...prev,
+      sides: {
+        ...prev.sides,
+        [currentSide]: {
+          ...prev.sides[currentSide],
+          background_url: null,
+        },
+      },
+    }));
+    setAutoLayoutError(null);
+    setAiLayoutMeta(null);
+    setAiSuggestedElementIds(new Set());
+  };
+
+  const handleCancelAutoLayout = () => {
+    if (autoLayoutAbortRef.current) {
+      autoLayoutAbortRef.current.abort();
+      autoLayoutAbortRef.current = null;
+    }
+    setIsAutoLayoutRunning(false);
+  };
+
+  const handleAutoLayout = async (designNote?: string) => {
+    const sideCfg = template.sides[currentSide];
+    if (!sideCfg.background_url) {
+      setAutoLayoutError("Спочатку завантажте фоновий дизайн бейджа.");
+      return;
+    }
+
+    const activeElements = sideCfg.elements.filter((el) => el.enabled);
+    if (activeElements.length === 0) {
+      setAutoLayoutError("Увімкніть хоча б один елемент бейджа у списку компонентів.");
+      return;
+    }
+
+    setAutoLayoutError(null);
+    setIsAutoLayoutRunning(true);
+
+    const controller = new AbortController();
+    autoLayoutAbortRef.current = controller;
+
+    const elementsPayload = activeElements.map((el) => ({
+      id: el.id,
+      type: el.type,
+      label:
+        el.type === "qr_code" && el.qr_label
+          ? `QR Code (${el.qr_label})`
+          : el.type === "name"
+          ? "Participant Name"
+          : el.type === "wca_id"
+          ? "WCA ID"
+          : el.type === "flag"
+          ? "Country Flag"
+          : el.type === "role"
+          ? "Role Badge"
+          : el.type === "competition_id"
+          ? "Competition / Registrant ID"
+          : el.type === "avatar"
+          ? "Competitor Photo"
+          : "Personal Schedule Table",
+    }));
+
+    const requestBody = {
+      action: "badge_layout",
+      image_base64: sideCfg.background_url,
+      width_mm: template.dimensions.width_mm,
+      height_mm: template.dimensions.height_mm,
+      side: currentSide,
+      elements: elementsPayload,
+      design_note: designNote || null,
+    };
+
+    const bearerToken =
+      wcaToken && wcaToken.split(".").length === 3 ? wcaToken : "dev-token";
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${bearerToken}`,
+    };
+
+    try {
+      const primaryUrl =
+        !import.meta.env.DEV && AI_PARSER_URL
+          ? AI_PARSER_URL
+          : getApiUrl("/api/ai/badge-layout");
+      const fallbackUrl =
+        !import.meta.env.DEV && AI_PARSER_URL
+          ? getApiUrl("/api/ai/badge-layout")
+          : AI_PARSER_URL;
+
+      let res = await fetch(primaryUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      if ((res.status === 404 || res.status >= 500) && fallbackUrl && fallbackUrl !== primaryUrl) {
+        res = await fetch(fallbackUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      }
+
+      if (!res.ok) {
+        const errPayload = await res.json().catch(() => ({}));
+        const detail = errPayload.detail || errPayload.error || `HTTP ${res.status}`;
+        if (res.status === 413) {
+          throw new Error("Зображення занадто велике. Спробуйте менший файл дизайну.");
+        }
+        if (res.status === 422) {
+          throw new Error(`Не вдалося розпізнати зображення: ${detail}`);
+        }
+        if (res.status === 429) {
+          throw new Error("Сервіс ШІ перевантажений (Throttling). Спробуйте через кілька секунд.");
+        }
+        throw new Error(`Помилка авто-розкадрування: ${detail}`);
+      }
+
+      const data: BadgeLayoutResponse = await res.json();
+      const placementsById = new Map(data.suggestion.elements.map((p) => [p.id, p]));
+      const suggestedPalette = data.suggestion.palette;
+      const suggestedRoleStyle = data.suggestion.role_style;
+
+      // Snapshot previous elements and roles before applying AI suggestion for 1-click Undo
+      setPreAiElementsSnapshot({
+        side: currentSide,
+        elements: JSON.parse(JSON.stringify(sideCfg.elements)),
+        roles: JSON.parse(JSON.stringify(roles)),
+      });
+
+      setTemplate((prev) => {
+        const currentSideState = prev.sides[currentSide];
+        const updatedElements = currentSideState.elements.map((el) => {
+          const suggested = placementsById.get(el.id);
+          if (!suggested) return el;
+
+          const nextElem: BadgeElement = {
+            ...el,
+            position: {
+              ...el.position,
+              x_mm: suggested.x_mm,
+              y_mm: suggested.y_mm,
+              width_mm: suggested.width_mm,
+              height_mm: suggested.height_mm,
+              z_index: suggested.z_index ?? el.position.z_index,
+            },
+          };
+
+          if (el.style) {
+            const fallbackFont =
+              el.type === "name"
+                ? suggestedPalette?.primary_font_family
+                : suggestedPalette?.secondary_font_family;
+
+            nextElem.style = {
+              ...el.style,
+              font_family: suggested.font_family ?? fallbackFont ?? el.style.font_family,
+              font_weight: suggested.font_weight ?? el.style.font_weight,
+              font_size: suggested.font_size ?? el.style.font_size,
+              italic:
+                suggested.italic !== undefined && suggested.italic !== null
+                  ? suggested.italic
+                  : el.style.italic,
+              uppercase:
+                suggested.uppercase !== undefined && suggested.uppercase !== null
+                  ? suggested.uppercase
+                  : el.style.uppercase,
+              letter_spacing_mm:
+                suggested.letter_spacing_mm !== undefined && suggested.letter_spacing_mm !== null
+                  ? suggested.letter_spacing_mm
+                  : el.style.letter_spacing_mm,
+              text_align: suggested.text_align ?? el.style.text_align,
+              text_color: suggested.text_color ?? el.style.text_color,
+              has_background:
+                suggested.has_background !== undefined && suggested.has_background !== null
+                  ? suggested.has_background
+                  : el.style.has_background,
+              background_color: suggested.background_color ?? el.style.background_color,
+              border_radius:
+                suggested.border_radius !== undefined && suggested.border_radius !== null
+                  ? suggested.border_radius
+                  : el.style.border_radius,
+              border_width:
+                suggested.border_width !== undefined && suggested.border_width !== null
+                  ? suggested.border_width
+                  : el.style.border_width,
+              border_color: suggested.border_color ?? el.style.border_color,
+            };
+          }
+
+          if (el.type === "qr_code") {
+            nextElem.qr_color = suggested.qr_color ?? el.qr_color;
+            nextElem.qr_bg_color = suggested.qr_bg_color ?? el.qr_bg_color;
+            nextElem.qr_text_color = suggested.qr_text_color ?? el.qr_text_color;
+            nextElem.qr_font_family =
+              suggested.font_family ??
+              suggestedPalette?.secondary_font_family ??
+              el.qr_font_family;
+          }
+
+          if (el.type === "avatar") {
+            if (suggested.border_color) {
+              nextElem.border_color = suggested.border_color;
+            } else if (suggestedPalette?.accent_color) {
+              nextElem.border_color = suggestedPalette.accent_color;
+            }
+            if (suggested.border_width !== undefined && suggested.border_width !== null) {
+              nextElem.border_width_mm = suggested.border_width;
+            }
+            if (suggested.border_radius !== undefined && suggested.border_radius !== null) {
+              nextElem.border_radius_mm = suggested.border_radius;
+            }
+          }
+
+          return nextElem;
+        });
+
+        return {
+          ...prev,
+          sides: {
+            ...prev.sides,
+            [currentSide]: {
+              ...currentSideState,
+              elements: updatedElements,
+            },
+          },
+        };
+      });
+
+      if (suggestedRoleStyle) {
+        const previewCompRoleId = competitors[currentParticipantIndex]?.role_id;
+        setRoles((prevRoles) =>
+          prevRoles.map((r, idx) => {
+            const isPrimaryPreviewedRole =
+              r.is_default ||
+              (previewCompRoleId && r.id === previewCompRoleId) ||
+              (!prevRoles.some((x) => x.is_default) && idx === 0);
+
+            return {
+              ...r,
+              style: {
+                ...r.style,
+                font_family: suggestedRoleStyle.font_family || r.style.font_family,
+                font_weight: suggestedRoleStyle.font_weight || r.style.font_weight,
+                font_size: suggestedRoleStyle.font_size || r.style.font_size,
+                italic:
+                  suggestedRoleStyle.italic !== undefined
+                    ? suggestedRoleStyle.italic
+                    : r.style.italic,
+                border_radius:
+                  suggestedRoleStyle.border_radius !== undefined
+                    ? suggestedRoleStyle.border_radius
+                    : r.style.border_radius,
+                border_width:
+                  suggestedRoleStyle.border_width !== undefined
+                    ? suggestedRoleStyle.border_width
+                    : r.style.border_width,
+                border_color: suggestedRoleStyle.border_color ?? r.style.border_color,
+                ...(isPrimaryPreviewedRole
+                  ? {
+                      background_color:
+                        suggestedRoleStyle.background_color || r.style.background_color,
+                      text_color: suggestedRoleStyle.text_color || r.style.text_color,
+                    }
+                  : {}),
+              },
+            };
+          })
+        );
+      }
+
+      const displaySwatches: string[] = [];
+      const pushUniqueHex = (c?: string | null) => {
+        if (!c) return;
+        const up = c.toUpperCase();
+        if (!displaySwatches.includes(up)) displaySwatches.push(up);
+      };
+      pushUniqueHex(suggestedRoleStyle?.background_color);
+      pushUniqueHex(suggestedPalette?.accent_color);
+      pushUniqueHex(suggestedPalette?.primary_text_color);
+      pushUniqueHex(suggestedPalette?.secondary_text_color);
+      for (const sw of suggestedPalette?.sampled_swatches || []) {
+        pushUniqueHex(sw);
+      }
+
+      setAiSuggestedElementIds(new Set(data.suggestion.elements.map((p) => p.id)));
+      setAiLayoutMeta({
+        summary: data.suggestion.layout_summary,
+        model: data.model,
+        latencyMs: data.latency_ms,
+        costUsd: data.cost_usd,
+        visualStyle: data.suggestion.visual_style,
+        primaryFont:
+          suggestedPalette?.primary_font_family ||
+          data.suggestion.elements.find((e) => e.font_family)?.font_family ||
+          null,
+        secondaryFont: suggestedPalette?.secondary_font_family || null,
+        swatches: displaySwatches.slice(0, 6),
+        saved: false,
+      });
+      setLastRawAiSuggestion({
+        side: currentSide,
+        suggestion: data.suggestion,
+        model: data.model,
+        prompt_version: data.prompt_version,
+        usage: data.usage,
+        cost_usd: data.cost_usd,
+        latency_ms: data.latency_ms,
+      });
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        return;
+      }
+      setAutoLayoutError(err?.message || "Не вдалося виконати AI Auto-Layout.");
+    } finally {
+      setIsAutoLayoutRunning(false);
+      autoLayoutAbortRef.current = null;
+    }
+  };
+
+  const handleUndoAiLayout = () => {
+    if (!preAiElementsSnapshot) return;
+    const targetSide = preAiElementsSnapshot.side;
+    setTemplate((prev) => ({
+      ...prev,
+      sides: {
+        ...prev.sides,
+        [targetSide]: {
+          ...prev.sides[targetSide],
+          elements: preAiElementsSnapshot.elements,
+        },
+      },
+    }));
+    if (preAiElementsSnapshot.roles) {
+      setRoles(preAiElementsSnapshot.roles);
+    }
+    setPreAiElementsSnapshot(null);
+    setAiSuggestedElementIds(new Set());
+    setAiLayoutMeta(null);
+  };
+
+  const handleSaveAiLayout = async () => {
+    setIsSavingLayout(true);
+    try {
+      const res = await fetch(getApiUrl("/api/badges/templates/current"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: template.name,
+          dimensions: template.dimensions,
+          sides: template.sides,
+          ai_suggestion: lastRawAiSuggestion,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`Save failed (HTTP ${res.status})`);
+      }
+      // Best-effort sync updated role styles to backend DB
+      await Promise.allSettled(
+        roles.map((r) =>
+          fetch(getApiUrl(`/api/roles/${encodeURIComponent(r.id)}`), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: r.name, style: r.style }),
+          })
+        )
+      );
+      setAiLayoutMeta((prev) => (prev ? { ...prev, saved: true } : null));
+    } catch (err: any) {
+      setAutoLayoutError(err?.message || "Не вдалося зберегти шаблон у базу даних.");
+    } finally {
+      setIsSavingLayout(false);
+    }
   };
 
   const handleAddRole = (name: string) => {
@@ -1618,6 +2024,12 @@ export const App: React.FC = () => {
           isFetchingAvatars={isFetchingAvatars}
           onAddAdditionalQrCode={handleAddAdditionalQrCode}
           onDeleteCompetitor={handleDeleteCompetitor}
+          backgroundUrl={currentSideConfig.background_url}
+          onClearBackground={handleClearBackground}
+          onAutoLayout={handleAutoLayout}
+          onCancelAutoLayout={handleCancelAutoLayout}
+          isAutoLayoutRunning={isAutoLayoutRunning}
+          autoLayoutError={autoLayoutError}
         />
 
         {/* Central Container: Badge Preview Canvas */}
@@ -1632,6 +2044,12 @@ export const App: React.FC = () => {
           currentCompetitor={competitors[currentParticipantIndex]}
           roles={roles}
           scheduleData={competitionSchedule}
+          aiSuggestedElementIds={aiSuggestedElementIds}
+          aiLayoutMeta={aiLayoutMeta}
+          onUndoAiLayout={preAiElementsSnapshot ? handleUndoAiLayout : undefined}
+          onSaveAiLayout={handleSaveAiLayout}
+          onDismissAiLayout={() => setAiLayoutMeta(null)}
+          isSavingLayout={isSavingLayout}
         />
 
         {/* Right Container: Properties Inspector */}

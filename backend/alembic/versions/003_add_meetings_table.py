@@ -19,18 +19,23 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "meetings",
-        sa.Column("id", sa.String(length=64), primary_key=True),
-        sa.Column("title", sa.String(length=255), nullable=False),
-        sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("end_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("duration_minutes", sa.Integer(), nullable=False),
-        sa.Column("participants_count", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("organizer", sa.String(length=255), nullable=False, server_default="Team Member"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-    )
-    op.create_index(op.f("ix_meetings_start_time"), "meetings", ["start_time"], unique=False)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if not inspector.has_table("meetings"):
+        op.create_table(
+            "meetings",
+            sa.Column("id", sa.String(length=64), primary_key=True),
+            sa.Column("title", sa.String(length=255), nullable=False),
+            sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("end_time", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("duration_minutes", sa.Integer(), nullable=False),
+            sa.Column("participants_count", sa.Integer(), nullable=False, server_default="1"),
+            sa.Column(
+                "organizer", sa.String(length=255), nullable=False, server_default="Team Member"
+            ),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        )
+        op.create_index(op.f("ix_meetings_start_time"), "meetings", ["start_time"], unique=False)
 
 
 def downgrade() -> None:

@@ -31,8 +31,15 @@ class Settings(BaseSettings):
     COGNITO_REGION: str = "us-east-1"
     # Amazon Bedrock & AI Parser Settings
     PARSER_MODEL: str = "anthropic.claude-opus-5-5"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3-flash-preview"
+    LAYOUT_MODEL: str = "gemini-3-flash-preview"
     COGNITO_USER_POOL_ID: str = "us-east-1_T7FaZwE2p"
     AWS_REGION: str = "us-east-1"
+
+    @property
+    def clean_gemini_api_key(self) -> str:
+        return self.GEMINI_API_KEY.strip().strip('"').strip("'")
 
     @property
     def cors_origin_list(self) -> list[str]:

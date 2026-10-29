@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Plus, Check, UserCheck, Shield, AlignLeft, AlignCenter, AlignRight, Search, X } from "lucide-react";
 import { Role, RoleStyle, Competitor } from "@/types/competitor";
+import { SUPPORTED_FONT_FAMILIES } from "@/types/badge";
 
 interface RoleInspectorProps {
   roles: Role[];
@@ -15,7 +16,7 @@ interface RoleInspectorProps {
   currentCompetitorId?: string;
 }
 
-const FONT_FAMILIES = ["Inter", "Roboto", "Montserrat", "Open Sans", "Arial"];
+const FONT_FAMILIES = SUPPORTED_FONT_FAMILIES;
 
 export const RoleInspector: React.FC<RoleInspectorProps> = ({
   roles,

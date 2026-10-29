@@ -78,6 +78,7 @@ class BadgeTemplateOut(BaseModel):
     is_active: bool
     dimensions: BadgeDimensions
     sides: BadgeSides
+    ai_suggestion: dict[str, Any] | None = None
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -87,6 +88,7 @@ class BadgeTemplateUpdate(BaseModel):
     name: str | None = None
     dimensions: BadgeDimensions | None = None
     sides: BadgeSides | None = None
+    ai_suggestion: dict[str, Any] | None = None
 
 
 class ExportPDFRequest(BaseModel):

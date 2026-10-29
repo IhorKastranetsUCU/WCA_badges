@@ -42,6 +42,8 @@ async def update_current_template(
         tpl.dimensions = payload.dimensions.model_dump()
     if payload.sides is not None:
         tpl.sides = payload.sides.model_dump()
+    if payload.ai_suggestion is not None:
+        tpl.ai_suggestion = payload.ai_suggestion
 
     await db.commit()
     await db.refresh(tpl)
@@ -89,11 +91,18 @@ async def export_badges_pdf(
     roles_map = {}
     if payload.roles and len(payload.roles) > 0:
         for r in payload.roles:
-            roles_map[r["id"]] = {"name": r.get("name", "Participant"), "style": r.get("style", {})}
+            roles_map[r["id"]] = {
+                "name": r.get("name", "Participant"),
+                "style": r.get("style", {}),
+                "is_default": bool(r.get("is_default", False)),
+            }
     else:
         roles_res = await db.execute(select(Role))
         roles_list = roles_res.scalars().all()
-        roles_map = {r.id: {"name": r.name, "style": r.style} for r in roles_list}
+        roles_map = {
+            r.id: {"name": r.name, "style": r.style, "is_default": bool(r.is_default)}
+            for r in roles_list
+        }
 
     pdf_bytes = render_badges_pdf(
         competitors=comp_dicts,

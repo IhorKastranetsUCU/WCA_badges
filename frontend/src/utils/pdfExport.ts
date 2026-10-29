@@ -111,7 +111,8 @@ export async function generateBadgesPdfBlob(
     origin_x: number,
     origin_y: number
   ) => {
-    const compRole = comp.role_id ? rolesMap.get(comp.role_id) : roles[0];
+    const defaultRole = roles.find((r) => r.is_default) || roles[0];
+    const compRole = (comp.role_id ? rolesMap.get(comp.role_id) : undefined) || defaultRole;
     const roleName = compRole?.name || "Participant";
 
     // Badge background fill

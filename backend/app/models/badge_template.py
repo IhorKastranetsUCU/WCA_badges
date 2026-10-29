@@ -159,6 +159,7 @@ class BadgeTemplate(Base):
             },
         },
     )
+    ai_suggestion = Column(JSON, nullable=True)
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

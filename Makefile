@@ -17,6 +17,8 @@ ACCOUNT_ID := $(strip $(subst ",,$(ACCOUNT_ID)))
 # Strip quotes from secrets and IDs
 GOOGLE_CLIENT_ID := $(strip $(subst ",,$(GOOGLE_CLIENT_ID)))
 GOOGLE_CLIENT_SECRET := $(strip $(subst ",,$(GOOGLE_CLIENT_SECRET)))
+GEMINI_API_KEY := $(strip $(subst ",,$(GEMINI_API_KEY)))
+GEMINI_MODEL := $(strip $(subst ",,$(if $(GEMINI_MODEL),$(GEMINI_MODEL),gemini-3-flash-preview)))
 COGNITO_DOMAIN_PREFIX := $(strip $(subst ",,$(if $(COGNITO_DOMAIN_PREFIX),$(COGNITO_DOMAIN_PREFIX),wca-badges-$(ACCOUNT_ID))))
 
 # AWS Serverless Resource Identifiers
@@ -151,19 +153,32 @@ parse:
 	fi
 	@PYTHONPATH=backend python3 backend/app/ai/cli.py "$(TEXT)" 2>/dev/null || PYTHONPATH=backend backend/.venv/bin/python backend/app/ai/cli.py "$(TEXT)"
 
+layout-test:
+	@if [ -z "$(IMAGE)" ]; then \
+		echo "Usage: make layout-test IMAGE=test/img.png"; \
+		exit 1; \
+	fi
+	@PYTHONPATH=backend python3 -m app.ai.layout_cli "$(IMAGE)" 2>/dev/null || PYTHONPATH=backend backend/.venv/bin/python -m app.ai.layout_cli "$(IMAGE)"
+
 aws-deploy-ai:
-	@echo "==> Deploying AI Agenda Parser Stack (infra/ai.yml)..."
-	aws cloudformation deploy \
+	@echo "==> Deploying AI Stack (infra/ai.yml)..."
+	@aws cloudformation deploy \
 	  --template-file infra/ai.yml \
 	  --stack-name $(PROJECT_NAME)-ai \
 	  --parameter-overrides \
 	    ProjectName=$(PROJECT_NAME) \
 	    ImageUri=$(ECR_REPO_URL):latest \
 	    ParserModel="$(if $(PARSER_MODEL),$(PARSER_MODEL),anthropic.claude-opus-5-5)" \
+	    LayoutModel="$(GEMINI_MODEL)" \
+	    GeminiApiKey="$(GEMINI_API_KEY)" \
 	    CognitoUserPoolId="$(if $(COGNITO_USER_POOL_ID),$(COGNITO_USER_POOL_ID),us-east-1_T7FaZwE2p)" \
 	    FrontendUrl=https://$(CLOUDFRONT_DOMAIN) \
 	  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
 	  --region $(AWS_REGION)
+	@echo "==> Refreshing AI Lambda container image digest..."
+	@aws lambda update-function-code --function-name $(PROJECT_NAME)-agenda-parser --image-uri $(ECR_REPO_URL):latest --region $(AWS_REGION) >/dev/null
+	@aws lambda wait function-updated --function-name $(PROJECT_NAME)-agenda-parser --region $(AWS_REGION)
+	@echo "==> AI Lambda ($(PROJECT_NAME)-agenda-parser) is updated and live!"
 
 aws-deploy-all: aws-deploy-backend aws-deploy-auth aws-deploy-frontend aws-deploy-reports aws-deploy-ai
 	@echo "==> Full serverless deployment complete (including AI parser)!"
