@@ -18,7 +18,7 @@ ACCOUNT_ID := $(strip $(subst ",,$(ACCOUNT_ID)))
 GOOGLE_CLIENT_ID := $(strip $(subst ",,$(GOOGLE_CLIENT_ID)))
 GOOGLE_CLIENT_SECRET := $(strip $(subst ",,$(GOOGLE_CLIENT_SECRET)))
 GEMINI_API_KEY := $(strip $(subst ",,$(GEMINI_API_KEY)))
-GEMINI_MODEL := $(strip $(subst ",,$(if $(GEMINI_MODEL),$(GEMINI_MODEL),gemini-3-flash-preview)))
+GEMINI_MODEL := $(strip $(subst ",,$(if $(GEMINI_MODEL),$(GEMINI_MODEL),gemini-3.5-flash)))
 COGNITO_DOMAIN_PREFIX := $(strip $(subst ",,$(if $(COGNITO_DOMAIN_PREFIX),$(COGNITO_DOMAIN_PREFIX),wca-badges-$(ACCOUNT_ID))))
 
 # AWS Serverless Resource Identifiers

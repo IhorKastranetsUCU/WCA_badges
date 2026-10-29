@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     # Amazon Bedrock & AI Parser Settings
     PARSER_MODEL: str = "anthropic.claude-opus-5-5"
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3-flash-preview"
-    LAYOUT_MODEL: str = "gemini-3-flash-preview"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
+    LAYOUT_MODEL: str = "gemini-3.5-flash"
     COGNITO_USER_POOL_ID: str = "us-east-1_T7FaZwE2p"
     AWS_REGION: str = "us-east-1"
 

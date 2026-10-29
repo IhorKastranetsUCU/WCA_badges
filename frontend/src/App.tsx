@@ -1384,6 +1384,11 @@ export const App: React.FC = () => {
           ctx.drawImage(img, 0, 0, w, h);
           optimizedUrl = canvas.toDataURL("image/jpeg", 0.88);
         }
+        if (img.height > img.width * 1.12 && template.dimensions.width_mm > template.dimensions.height_mm) {
+          handleDimensionsChange({ preset: "A6", width_mm: 105, height_mm: 148 });
+        } else if (img.width > img.height * 1.12 && template.dimensions.height_mm > template.dimensions.width_mm) {
+          handleDimensionsChange({ preset: "100x70", width_mm: 100, height_mm: 70 });
+        }
         setTemplate((prev) => ({
           ...prev,
           sides: {

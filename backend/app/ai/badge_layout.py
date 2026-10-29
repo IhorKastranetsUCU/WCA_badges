@@ -8,7 +8,7 @@ import math
 from typing import Any, Literal
 
 import httpx
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageDraw, ImageFilter, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.core.config import settings
@@ -202,9 +202,13 @@ class BadgeLayoutSuggestion(BaseModel):
 
 
 LAYOUT_PRICES: dict[str, dict[str, float]] = {
+    "gemini-3.5-flash": {"input": 0.15, "output": 0.60},
+    "gemini-3.6-flash": {"input": 0.15, "output": 0.60},
     "gemini-3-flash-preview": {"input": 0.15, "output": 0.60},
+    "gemini-3.1-flash-lite-preview": {"input": 0.075, "output": 0.30},
     "gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30},
     "gemini-3.8-flash": {"input": 0.15, "output": 0.60},
+    "us.amazon.nova-pro-v1:0": {"input": 0.80, "output": 3.20},
     "amazon.nova-pro-v1:0": {"input": 0.80, "output": 3.20},
     "amazon.nova-lite-v1:0": {"input": 0.06, "output": 0.24},
     "anthropic.claude-opus-5-5": {"input": 4.00, "output": 20.00},
@@ -308,20 +312,38 @@ LAYOUT_SYSTEM_PROMPT = (
     "competition credential badges. You receive an uploaded badge background template, its exact "
     "physical dimensions in millimeters (width_mm x height_mm), pixel-sampled color swatches from "
     "the artwork, and a list of badge elements to place and style.\n\n"
-    "1. SPATIAL LAYOUT & NEGATIVE SPACE RULES:\n"
+    "1. SPATIAL LAYOUT, RULER GRID & NEGATIVE SPACE RULES (CRITICAL FOR ACCURATE PLACEMENT):\n"
+    "- The image has a subtle millimeter coordinate grid overlaid every 10 mm: cyan X-axis numbers "
+    "(10, 20, 30...) along the TOP edge and yellow Y-axis numbers (10, 20, 30...) along the LEFT edge. "
+    "READ THESE EXACT MILLIMETER TICKS directly off the image to place elements with +/-1 mm precision!\n"
     "- Origin (0, 0) is TOP-LEFT; (width_mm, height_mm) is BOTTOM-RIGHT.\n"
     "- Each element's (x_mm, y_mm) is its TOP-LEFT corner, and (width_mm, height_mm) is its box size.\n"
-    "- Keep >= 3.5 mm safe bleed margin from all outer edges.\n"
-    "- NEVER cover existing competition titles, logos, cube illustrations, headers, footers, or "
-    "lanyard punch-hole markers. Place elements inside clean negative space with NO overlaps:\n"
-    "  * 'name': primary focal point, width 55-85% of badge width, font_size 18-24.\n"
-    "  * 'wca_id': placed neatly below or near 'name', font_size 11-14.\n"
-    "  * 'flag': ~3:2 ratio (e.g. 15x10 mm or 16x11 mm), centered above name or in an open header corner.\n"
-    "  * 'role': role badge pill (46-64 mm wide, 8-10 mm tall, role_style.font_size 12-15), typically below wca_id or near footer.\n"
-    "  * 'competition_id': compact registrant number (16-24 mm wide, 6-8 mm tall), corner or beside ID.\n"
-    "  * 'avatar': square/portrait photo slot (16x16 mm to 24x24 mm), never overlapping text.\n"
-    "  * 'qr_code': scannable square box (18x18 mm to 26x22 mm) in a clear corner/footer.\n"
-    "  * 'schedule': large timetable block on back side (65-90% area in open zone).\n\n"
+    "- Keep >= 4.0 mm safe bleed margin from all outer edges.\n"
+    "- NEVER cover existing competition titles, WCA logos, cube illustrations, sponsor banners, or "
+    "lanyard punch-hole slots! Inspect the image + the Computer-Vision Clean Negative-Space Zones "
+    "in the prompt:\n"
+    "  * If the artwork draws dedicated placeholder boxes/cards/frames (e.g. a white/dark rectangle "
+    "for Name, a square frame for Photo/QR, or a bottom ribbon for Role), align the corresponding "
+    "element EXACTLY inside that drawn container!\n"
+    "  * Otherwise, compose a clean, balanced, non-overlapping typographic hierarchy inside the "
+    "largest clean negative-space zone (e.g. below a top header logo, or inside the open left/right "
+    "panel if the design is asymmetric):\n"
+    "    - 'name': primary hero focal point, width 60-85% of the clean zone width, height 11-16 mm, "
+    "font_size 18-24.\n"
+    "    - 'wca_id': neatly aligned directly below 'name' (2-3 mm vertical gap), height 7-9 mm, "
+    "font_size 11-14.\n"
+    "    - 'flag': ~3:2 ratio (15x10 mm or 18x12 mm), centered cleanly above 'name' (3 mm gap) or in "
+    "an open clean corner.\n"
+    "    - 'role': role badge pill (48-68% of clean zone width, 8.5-11 mm tall, role_style.font_size "
+    "12-15), placed cleanly below 'wca_id' or in a dedicated clean bottom band.\n"
+    "    - 'competition_id': compact registrant number (18-24 mm wide, 6-8 mm tall), placed in a "
+    "clean corner or beside WCA ID.\n"
+    "    - 'avatar': square/portrait photo slot (18x18 mm to 28x28 mm), centered above 'name' on "
+    "vertical portrait badges or on the side of 'name' on horizontal landscape badges — NEVER overlapping text.\n"
+    "    - 'qr_code': scannable square box (18x18 mm to 26x24 mm) in a clean corner/footer.\n"
+    "    - 'schedule': large timetable block on back side (65-90% area in open zone).\n"
+    "- ZERO OVERLAPS: verify that for every pair of elements, their bounding boxes [x_mm, x_mm+width_mm] x "
+    "[y_mm, y_mm+height_mm] do NOT intersect, and share a clean common alignment axis!\n\n"
     "2. TYPOGRAPHY MATCHING RULES (CRITICAL — DO NOT DEFAULT EVERYTHING TO INTER):\n"
     "Inspect any lettering, shapes, and mood on the template artwork and pick distinct matching fonts:\n"
     "- Classic / Royal / Crest / Vintage / Prestigious / Serif artwork -> primary_font_family="
@@ -479,9 +501,15 @@ def extract_image_palette(jpeg_bytes: bytes) -> dict[str, Any]:
     }
 
 
-def prepare_badge_image(image_base64: str) -> tuple[bytes, tuple[int, int], list[list[int]]]:
+def prepare_badge_image(
+    image_base64: str,
+    width_mm: float | None = None,
+    height_mm: float | None = None,
+) -> tuple[bytes, tuple[int, int], list[list[int]]]:
     """
-    Validates, normalizes, and downscales a base64 badge background image for Vision inference.
+    Validates, normalizes, center-crops to match the physical badge aspect ratio
+    (matching CSS `background-size: cover; background-position: center`), and downscales
+    a base64 badge background image for Vision inference.
     Returns (jpeg_bytes, (orig_w, orig_h), 5x5_luminance_grid).
     """
     if not image_base64 or not image_base64.strip():
@@ -523,6 +551,32 @@ def prepare_badge_image(image_base64: str) -> tuple[bytes, tuple[int, int], list
             else:
                 rgb = img.convert("RGB")
 
+            max_side = 768
+            if width_mm and height_mm and width_mm > 0 and height_mm > 0:
+                target_ratio = width_mm / height_mm
+                if target_ratio >= 1.0:
+                    fit_w = max_side
+                    fit_h = max(32, int(round(max_side / target_ratio)))
+                else:
+                    fit_h = max_side
+                    fit_w = max(32, int(round(max_side * target_ratio)))
+                rgb = ImageOps.fit(
+                    rgb,
+                    (fit_w, fit_h),
+                    method=Image.Resampling.LANCZOS,
+                    centering=(0.5, 0.5),
+                )
+            else:
+                w, h = rgb.size
+                if w > max_side or h > max_side:
+                    if w >= h:
+                        new_w = max_side
+                        new_h = max(16, int(round(h * (max_side / w))))
+                    else:
+                        new_h = max_side
+                        new_w = max(16, int(round(w * (max_side / h))))
+                    rgb = rgb.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
             # Compute 5x5 perceived luminance grid (0 = black, 255 = white)
             small_grid = rgb.resize((5, 5), Image.Resampling.BOX)
             luminance_grid: list[list[int]] = []
@@ -534,20 +588,8 @@ def prepare_badge_image(image_base64: str) -> tuple[bytes, tuple[int, int], list
                     row.append(lum)
                 luminance_grid.append(row)
 
-            # Resize to max 768px on longest side for fast, low-token Vision inference
-            max_side = 768
-            w, h = rgb.size
-            if w > max_side or h > max_side:
-                if w >= h:
-                    new_w = max_side
-                    new_h = max(16, int(round(h * (max_side / w))))
-                else:
-                    new_h = max_side
-                    new_w = max(16, int(round(w * (max_side / h))))
-                rgb = rgb.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
             buf = io.BytesIO()
-            rgb.save(buf, format="JPEG", quality=82, optimize=True)
+            rgb.save(buf, format="JPEG", quality=84, optimize=True)
             return buf.getvalue(), (orig_w, orig_h), luminance_grid
     except BadgeLayoutError:
         raise
@@ -555,6 +597,230 @@ def prepare_badge_image(image_base64: str) -> tuple[bytes, tuple[int, int], list
         raise BadgeLayoutError(
             "Uploaded file is not a valid raster image (PNG, JPG, or WebP)."
         ) from e
+
+
+def _largest_clean_rectangles(
+    busyness_grid: list[list[int]],
+    fine_lum_grid: list[list[int]],
+    width_mm: float,
+    height_mm: float,
+    max_busyness: int,
+    top_k: int = 3,
+) -> list[dict[str, Any]]:
+    """Finds up to top_k distinct maximal low-busyness rectangles in exact millimeters."""
+    rows = len(busyness_grid)
+    cols = len(busyness_grid[0]) if rows else 0
+    if rows == 0 or cols == 0:
+        return []
+
+    blocked = [[busyness_grid[r][c] > max_busyness for c in range(cols)] for r in range(rows)]
+    found: list[dict[str, Any]] = []
+
+    for _ in range(top_k):
+        best_area = 0
+        best_rect: tuple[int, int, int, int] | None = None
+        heights = [0] * cols
+
+        for r in range(rows):
+            for c in range(cols):
+                heights[c] = 0 if blocked[r][c] else heights[c] + 1
+
+            # Largest rectangle in histogram for row r
+            stack: list[int] = []
+            for c in range(cols + 1):
+                cur_h = heights[c] if c < cols else 0
+                while stack and cur_h < heights[stack[-1]]:
+                    h_cells = heights[stack.pop()]
+                    c_start = stack[-1] + 1 if stack else 0
+                    w_cells = c - c_start
+                    # Require meaningful width (>= 25% of badge) and height (>= 15% of badge)
+                    if w_cells >= max(4, cols // 4) and h_cells >= max(2, rows // 8):
+                        area = w_cells * h_cells
+                        if area > best_area:
+                            best_area = area
+                            best_rect = (c_start, r - h_cells + 1, c, r + 1)
+                stack.append(c)
+
+        if best_rect is None or best_area < 12:
+            break
+
+        c0, r0, c1, r1 = best_rect
+        x_mm = round((c0 / cols) * width_mm, 1)
+        y_mm = round((r0 / rows) * height_mm, 1)
+        w_mm = round(((c1 - c0) / cols) * width_mm, 1)
+        h_mm = round(((r1 - r0) / rows) * height_mm, 1)
+        area_pct = round((best_area / float(rows * cols)) * 100.0, 1)
+
+        lum_vals = [
+            fine_lum_grid[rr][cc] for rr in range(r0, r1) for cc in range(c0, c1)
+        ]
+        busy_vals = [
+            busyness_grid[rr][cc] for rr in range(r0, r1) for cc in range(c0, c1)
+        ]
+        avg_lum = int(round(sum(lum_vals) / max(1, len(lum_vals))))
+        avg_busy = int(round(sum(busy_vals) / max(1, len(busy_vals))))
+
+        found.append(
+            {
+                "x_mm": x_mm,
+                "y_mm": y_mm,
+                "width_mm": w_mm,
+                "height_mm": h_mm,
+                "area_pct": area_pct,
+                "avg_lum": avg_lum,
+                "avg_busyness": avg_busy,
+            }
+        )
+        # Mask interior of discovered zone so next iteration finds secondary slots/boxes
+        for rr in range(r0, r1):
+            for cc in range(c0, c1):
+                blocked[rr][cc] = True
+
+    return found
+
+
+def analyze_visual_zones(
+    jpeg_bytes: bytes,
+    width_mm: float,
+    height_mm: float,
+) -> dict[str, Any]:
+    """
+    Computes a 20x20 fine luminance map, a 20x20 edge-energy busyness map (distinguishing
+    logos/titles/illustrations from clean negative space & placeholder boxes), and detects
+    the largest clean negative-space rectangles and busy bands in millimeters.
+    """
+    cols, rows = 20, 20
+    with Image.open(io.BytesIO(jpeg_bytes)) as img:
+        rgb = img.convert("RGB")
+        gray = rgb.convert("L").resize((200, 200), Image.Resampling.BILINEAR)
+        edges = gray.filter(ImageFilter.FIND_EDGES)
+        small_lum = gray.resize((cols, rows), Image.Resampling.BOX)
+        small_edge = edges.resize((cols, rows), Image.Resampling.BOX)
+
+        fine_lum_grid: list[list[int]] = []
+        busyness_grid: list[list[int]] = []
+        for r in range(rows):
+            lum_row: list[int] = []
+            busy_row: list[int] = []
+            for c in range(cols):
+                lum_val = int(small_lum.getpixel((c, r)))
+                edge_val = int(small_edge.getpixel((c, r)))
+                busy_score = min(100, int(round(edge_val * 1.55)))
+                lum_row.append(lum_val)
+                busy_row.append(busy_score)
+            fine_lum_grid.append(lum_row)
+            busyness_grid.append(busy_row)
+
+    clean_zones = _largest_clean_rectangles(
+        busyness_grid, fine_lum_grid, width_mm, height_mm, max_busyness=17, top_k=3
+    )
+    if not clean_zones or clean_zones[0]["area_pct"] < 18.0:
+        clean_zones = _largest_clean_rectangles(
+            busyness_grid, fine_lum_grid, width_mm, height_mm, max_busyness=28, top_k=3
+        )
+
+    # Identify busy header / footer / left / right artwork bands to warn the Vision LLM
+    avoid_notes: list[str] = []
+    row_busy = [sum(busyness_grid[r]) / cols for r in range(rows)]
+    col_busy = [sum(busyness_grid[r][c] for r in range(rows)) / rows for c in range(cols)]
+
+    top_busy_rows = 0
+    while top_busy_rows < rows // 2 and row_busy[top_busy_rows] >= 18:
+        top_busy_rows += 1
+    if top_busy_rows >= 2:
+        y_end = round((top_busy_rows / rows) * height_mm, 1)
+        avoid_notes.append(
+            f"Top header band y=0.0..{y_end} mm has dense artwork/title/logos — keep elements BELOW y={y_end} mm."
+        )
+
+    bot_busy_rows = 0
+    while bot_busy_rows < rows // 2 and row_busy[rows - 1 - bot_busy_rows] >= 18:
+        bot_busy_rows += 1
+    if bot_busy_rows >= 2:
+        y_start = round(((rows - bot_busy_rows) / rows) * height_mm, 1)
+        avoid_notes.append(
+            f"Bottom footer band y={y_start}..{height_mm:.1f} mm has footer graphics — keep elements ABOVE y={y_start} mm."
+        )
+
+    left_busy_cols = 0
+    while left_busy_cols < cols // 2 and col_busy[left_busy_cols] >= 20:
+        left_busy_cols += 1
+    if left_busy_cols >= 3:
+        x_end = round((left_busy_cols / cols) * width_mm, 1)
+        avoid_notes.append(
+            f"Left panel x=0.0..{x_end} mm has dense illustration — prefer placing text to the RIGHT of x={x_end} mm."
+        )
+
+    right_busy_cols = 0
+    while right_busy_cols < cols // 2 and col_busy[cols - 1 - right_busy_cols] >= 20:
+        right_busy_cols += 1
+    if right_busy_cols >= 3:
+        x_start = round(((cols - right_busy_cols) / cols) * width_mm, 1)
+        avoid_notes.append(
+            f"Right panel x={x_start}..{width_mm:.1f} mm has dense illustration — prefer placing text to the LEFT of x={x_start} mm."
+        )
+
+    return {
+        "fine_lum_grid": fine_lum_grid,
+        "busyness_grid": busyness_grid,
+        "clean_zones": clean_zones,
+        "avoid_notes": avoid_notes,
+    }
+
+
+def render_ruler_annotated_image(
+    jpeg_bytes: bytes,
+    width_mm: float,
+    height_mm: float,
+    clean_zones: list[dict[str, Any]] | None = None,
+) -> bytes:
+    """
+    Overlays a semi-transparent 10 mm coordinate ruler grid (Set-of-Mark visual prompting)
+    onto a temporary copy of the badge image sent ONLY to the Vision LLM so it reads exact
+    millimeter coordinates directly off the image pixels.
+    """
+    with Image.open(io.BytesIO(jpeg_bytes)) as img:
+        base = img.convert("RGBA")
+        w, h = base.size
+        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        # Highlight primary detected clean zone with a subtle emerald guide outline
+        if clean_zones:
+            z0 = clean_zones[0]
+            zx0 = int(round((z0["x_mm"] / width_mm) * w))
+            zy0 = int(round((z0["y_mm"] / height_mm) * h))
+            zx1 = int(round(((z0["x_mm"] + z0["width_mm"]) / width_mm) * w))
+            zy1 = int(round(((z0["y_mm"] + z0["height_mm"]) / height_mm) * h))
+            draw.rectangle([zx0, zy0, zx1, zy1], outline=(16, 185, 129, 150), width=2)
+
+        step_mm = 10 if max(width_mm, height_mm) <= 130 else 15
+        x_tick = step_mm
+        while x_tick < width_mm - 4:
+            px = int(round((x_tick / width_mm) * w))
+            draw.line([(px, 0), (px, h)], fill=(0, 0, 0, 55), width=2)
+            draw.line([(px, 0), (px, h)], fill=(6, 182, 212, 115), width=1)
+            label = str(int(x_tick))
+            tw = 6 * len(label) + 6
+            draw.rectangle([px - tw // 2, 2, px + tw // 2, 15], fill=(15, 23, 42, 210))
+            draw.text((px - tw // 2 + 3, 3), label, fill=(103, 232, 249, 255))
+            x_tick += step_mm
+
+        y_tick = step_mm
+        while y_tick < height_mm - 4:
+            py = int(round((y_tick / height_mm) * h))
+            draw.line([(0, py), (w, py)], fill=(0, 0, 0, 55), width=2)
+            draw.line([(0, py), (w, py)], fill=(6, 182, 212, 115), width=1)
+            label = str(int(y_tick))
+            tw = 6 * len(label) + 6
+            draw.rectangle([2, py - 7, 2 + tw, py + 6], fill=(15, 23, 42, 210))
+            draw.text((5, py - 6), label, fill=(253, 224, 71, 255))
+            y_tick += step_mm
+
+        composited = Image.alpha_composite(base, overlay).convert("RGB")
+        buf = io.BytesIO()
+        composited.save(buf, format="JPEG", quality=82, optimize=True)
+        return buf.getvalue()
 
 
 def _sample_region_luminance(
@@ -641,6 +907,255 @@ def _fallback_placement_for_element(
     )
 
 
+def _sample_interior_busyness(
+    busyness_grid: list[list[int]],
+    badge_w: float,
+    badge_h: float,
+    x_mm: float,
+    y_mm: float,
+    w_mm: float,
+    h_mm: float,
+) -> int:
+    """Samples edge-energy busyness on the inner 70% of an element box (ignoring frame borders)."""
+    ix = x_mm + w_mm * 0.15
+    iy = y_mm + h_mm * 0.15
+    iw = max(2.0, w_mm * 0.70)
+    ih = max(2.0, h_mm * 0.70)
+    return _sample_region_luminance(busyness_grid, badge_w, badge_h, ix, iy, iw, ih)
+
+
+def _pack_elements_in_clean_zone(
+    placements: list[SuggestedElementPlacement],
+    spec_by_id: dict[str, LayoutElementSpec],
+    zone: dict[str, Any],
+    badge_w: float,
+    badge_h: float,
+) -> list[SuggestedElementPlacement]:
+    """Composes elements in a clean typographic hierarchy inside the primary detected clean zone."""
+    margin = 3.5
+    zx = max(margin, float(zone["x_mm"]) + 1.5)
+    zy = max(margin, float(zone["y_mm"]) + 1.5)
+    zw = max(24.0, min(badge_w - zx - margin, float(zone["width_mm"]) - 3.0))
+    zh = max(22.0, min(badge_h - zy - margin, float(zone["height_mm"]) - 3.0))
+    cx = zx + zw / 2.0
+
+    by_id = {p.id: p for p in placements}
+    # Separate side/corner utility items from the main vertical credential stack
+    order_priority = {
+        "avatar": 1,
+        "flag": 2,
+        "name": 3,
+        "wca_id": 4,
+        "role": 5,
+        "schedule": 6,
+    }
+    stack_items: list[SuggestedElementPlacement] = []
+    qr_items: list[SuggestedElementPlacement] = []
+    comp_id_items: list[SuggestedElementPlacement] = []
+
+    for p in placements:
+        kind = spec_by_id[p.id].type
+        if kind == "qr_code":
+            qr_items.append(p)
+        elif kind == "competition_id":
+            comp_id_items.append(p)
+        else:
+            stack_items.append(p)
+
+    stack_items.sort(key=lambda p: order_priority.get(spec_by_id[p.id].type, 9))
+
+    # Reserve bottom/corner space if QR code is present and zone is tall/wide enough
+    usable_w = zw
+    usable_x = zx
+    usable_h = zh
+    if qr_items and zw >= 68.0 and zh < 52.0:
+        # Landscape zone: put QR on the right side of the clean zone, text stack on the left
+        qr_side = min(20.0, zh - 2.0)
+        usable_w = max(36.0, zw - qr_side - 4.0)
+        cx = usable_x + usable_w / 2.0
+
+    # Size each stack item cleanly relative to usable_w / usable_h
+    sized: list[tuple[SuggestedElementPlacement, float, float]] = []
+    for p in stack_items:
+        kind = spec_by_id[p.id].type
+        if kind == "avatar":
+            s = min(22.0, usable_h * 0.28, usable_w * 0.35)
+            s = max(14.0, s)
+            sized.append((p, round(s, 1), round(s, 1)))
+        elif kind == "flag":
+            fw = min(16.5, usable_w * 0.24)
+            fw = max(11.0, fw)
+            fh = round(fw / 1.5, 1)
+            sized.append((p, round(fw, 1), fh))
+        elif kind == "name":
+            nw = min(usable_w, max(36.0, usable_w * 0.92))
+            nh = min(14.0, max(9.5, usable_h * 0.22))
+            sized.append((p, round(nw, 1), round(nh, 1)))
+        elif kind == "wca_id":
+            ww = min(usable_w, max(30.0, usable_w * 0.82))
+            wh = min(8.5, max(6.5, usable_h * 0.14))
+            sized.append((p, round(ww, 1), round(wh, 1)))
+        elif kind == "role":
+            rw = min(usable_w * 0.76, 62.0)
+            rw = max(28.0, min(usable_w, rw))
+            rh = min(10.0, max(7.5, usable_h * 0.16))
+            sized.append((p, round(rw, 1), round(rh, 1)))
+        else:  # schedule
+            sized.append((p, round(usable_w, 1), round(max(24.0, usable_h * 0.72), 1)))
+
+    if qr_items and not (zw >= 68.0 and zh < 52.0):
+        qr_h_reserve = min(20.0, max(15.0, zh * 0.24)) + 2.5
+        if sum(h for _, _, h in sized) + qr_h_reserve <= zh:
+            usable_h = zh - qr_h_reserve
+
+    gap = 2.5 if len(sized) <= 4 else 1.8
+    total_h = sum(h for _, _, h in sized) + gap * max(0, len(sized) - 1)
+    if total_h > usable_h and total_h > 0:
+        scale = usable_h / total_h
+        gap = max(1.0, gap * scale)
+        sized = [
+            (
+                p,
+                w if spec_by_id[p.id].type not in ("avatar", "flag") else round(max(10.0, w * scale), 1),
+                round(max(5.5, h * scale), 1),
+            )
+            for p, w, h in sized
+        ]
+        total_h = sum(h for _, _, h in sized) + gap * max(0, len(sized) - 1)
+
+    cur_y = zy + max(0.0, (usable_h - total_h) / 2.0)
+    updated: dict[str, SuggestedElementPlacement] = {}
+    for p, w_mm, h_mm in sized:
+        x_mm = round(max(margin, min(badge_w - margin - w_mm, cx - w_mm / 2.0)), 1)
+        y_mm = round(max(margin, min(badge_h - margin - h_mm, cur_y)), 1)
+        upd: dict[str, Any] = {
+            "x_mm": x_mm,
+            "y_mm": y_mm,
+            "width_mm": w_mm,
+            "height_mm": h_mm,
+        }
+        if spec_by_id[p.id].type in ("name", "wca_id"):
+            upd["text_align"] = "center"
+        updated[p.id] = p.model_copy(update=upd)
+        cur_y += h_mm + gap
+
+    for idx_q, qp in enumerate(qr_items):
+        qs = round(min(20.0, max(15.0, min(zw, zh) * 0.28)), 1)
+        qx = (
+            round(max(margin, zx + zw - qs), 1)
+            if idx_q % 2 == 0
+            else round(max(margin, zx), 1)
+        )
+        qy = round(max(margin, zy + zh - qs), 1)
+        updated[qp.id] = qp.model_copy(
+            update={"x_mm": qx, "y_mm": qy, "width_mm": qs, "height_mm": qs}
+        )
+
+    for cp in comp_id_items:
+        cw = round(min(22.0, max(14.0, zw * 0.26)), 1)
+        ch = 6.5
+        cx_pos = round(max(margin, zx + zw - cw), 1)
+        cy_pos = round(max(margin, zy), 1)
+        updated[cp.id] = cp.model_copy(
+            update={
+                "x_mm": cx_pos,
+                "y_mm": cy_pos,
+                "width_mm": cw,
+                "height_mm": ch,
+                "text_align": "right",
+            }
+        )
+
+    return [updated.get(p.id, by_id[p.id]) for p in placements]
+
+
+def _resolve_overlaps_and_align(
+    placements: list[SuggestedElementPlacement],
+    spec_by_id: dict[str, LayoutElementSpec],
+    badge_w: float,
+    badge_h: float,
+    min_safe_y: float = 2.5,
+) -> list[SuggestedElementPlacement]:
+    """Guarantees zero pairwise bounding-box overlaps and snaps centered columns to a common axis."""
+    if len(placements) <= 1:
+        return placements
+
+    margin = 2.5
+    boxes = [p.model_copy() for p in placements]
+
+    # 1. Snap near-centered vertical stack elements to a common horizontal center axis
+    center_candidates = [
+        i
+        for i, b in enumerate(boxes)
+        if spec_by_id[b.id].type in ("avatar", "flag", "name", "wca_id", "role")
+        and (b.text_align in (None, "center"))
+    ]
+    if len(center_candidates) >= 2:
+        centers = sorted(boxes[i].x_mm + boxes[i].width_mm / 2.0 for i in center_candidates)
+        median_cx = centers[len(centers) // 2]
+        for i in center_candidates:
+            cx_i = boxes[i].x_mm + boxes[i].width_mm / 2.0
+            if abs(cx_i - median_cx) <= badge_w * 0.10:
+                new_x = round(
+                    max(margin, min(badge_w - margin - boxes[i].width_mm, median_cx - boxes[i].width_mm / 2.0)),
+                    1,
+                )
+                boxes[i] = boxes[i].model_copy(update={"x_mm": new_x})
+
+    # 2. Iterative vertical de-overlapping pass
+    gap_mm = 1.8
+    for _ in range(4):
+        order = sorted(range(len(boxes)), key=lambda idx: (boxes[idx].y_mm, boxes[idx].x_mm))
+        moved = False
+        for pos_a in range(len(order)):
+            ia = order[pos_a]
+            a = boxes[ia]
+            for pos_b in range(pos_a + 1, len(order)):
+                ib = order[pos_b]
+                b = boxes[ib]
+                ox = min(a.x_mm + a.width_mm, b.x_mm + b.width_mm) - max(a.x_mm, b.x_mm)
+                oy = min(a.y_mm + a.height_mm, b.y_mm + b.height_mm) - max(a.y_mm, b.y_mm)
+                if ox > 2.0 and oy > -0.8:
+                    pushed_y = round(a.y_mm + a.height_mm + gap_mm, 1)
+                    if pushed_y > b.y_mm:
+                        boxes[ib] = b.model_copy(update={"y_mm": pushed_y})
+                        moved = True
+        if not moved:
+            break
+
+    # 3. If pushing down caused bottom overflow, shift stack up into safe zone or compact gaps
+    max_bottom = max(b.y_mm + b.height_mm for b in boxes)
+    limit_bottom = badge_h - margin
+    if max_bottom > limit_bottom:
+        overflow = max_bottom - limit_bottom
+        min_y = min(b.y_mm for b in boxes)
+        up_room = max(0.0, min_y - max(margin, min_safe_y))
+        shift_up = min(overflow, up_room)
+        if shift_up > 0:
+            boxes = [
+                b.model_copy(update={"y_mm": round(max(margin, b.y_mm - shift_up), 1)})
+                for b in boxes
+            ]
+        max_bottom = max(b.y_mm + b.height_mm for b in boxes)
+        if max_bottom > limit_bottom:
+            top_anchor = min(b.y_mm for b in boxes)
+            span = max_bottom - top_anchor
+            avail = max(16.0, limit_bottom - top_anchor)
+            if span > 0:
+                ratio = avail / span
+                boxes = [
+                    b.model_copy(
+                        update={
+                            "y_mm": round(top_anchor + (b.y_mm - top_anchor) * ratio, 1),
+                            "height_mm": round(max(5.5, b.height_mm * max(0.78, ratio)), 1),
+                        }
+                    )
+                    for b in boxes
+                ]
+
+    return boxes
+
+
 def _refine_and_clamp_suggestion(
     suggestion: BadgeLayoutSuggestion,
     requested_elements: list[LayoutElementSpec],
@@ -648,11 +1163,16 @@ def _refine_and_clamp_suggestion(
     badge_h: float,
     luminance_grid: list[list[int]],
     palette_info: dict[str, Any] | None = None,
+    visual_zones: dict[str, Any] | None = None,
 ) -> BadgeLayoutSuggestion:
     """
     Enforces physical badge boundaries, minimum scannable/readable sizes, exact element IDs,
-    harmonious brand palette & role styling, and WCAG contrast protection.
+    artwork-collision avoidance, zero bounding-box overlaps, harmonious brand palette & role
+    styling, and WCAG contrast protection.
     """
+    active_lum_grid = (visual_zones or {}).get("fine_lum_grid") or luminance_grid
+    busyness_grid = (visual_zones or {}).get("busyness_grid")
+    clean_zones = (visual_zones or {}).get("clean_zones") or []
     dark_fallback = (palette_info or {}).get("dark_ink_color", "#0F172A")
     light_fallback = (palette_info or {}).get("light_ink_color", "#FFFFFF")
     accent_fallback = (palette_info or {}).get("primary_accent", "#2563EB")
@@ -803,7 +1323,7 @@ def _refine_and_clamp_suggestion(
 
             min_contrast = 85 if spec.type == "name" else 72
             region_lum = _sample_region_luminance(
-                luminance_grid, badge_w, badge_h, x_mm, y_mm, w_mm, h_mm
+                active_lum_grid, badge_w, badge_h, x_mm, y_mm, w_mm, h_mm
             )
             target_bg_lum = _hex_luminance(bg_color) if (has_bg and bg_color) else region_lum
 
@@ -855,11 +1375,62 @@ def _refine_and_clamp_suggestion(
             )
         )
 
+    # Post-inference Computer-Vision artwork-collision recovery & zero-overlap alignment
+    min_safe_y = margin
+    if busyness_grid and clean_zones:
+        top_zone = clean_zones[0]
+        min_safe_y = max(margin, float(top_zone["y_mm"]))
+        colliding_count = 0
+        hero_collides = False
+        for p in refined:
+            b_score = _sample_interior_busyness(
+                busyness_grid, badge_w, badge_h, p.x_mm, p.y_mm, p.width_mm, p.height_mm
+            )
+            if b_score >= 30:
+                colliding_count += 1
+                if spec_by_id[p.id].type == "name":
+                    hero_collides = True
+
+        if (
+            (hero_collides or colliding_count >= max(1, (len(refined) + 1) // 2))
+            and float(top_zone["area_pct"]) >= 18.0
+            and int(top_zone["avg_busyness"]) <= 19
+        ):
+            refined = _pack_elements_in_clean_zone(
+                refined, spec_by_id, top_zone, badge_w, badge_h
+            )
+
+    refined = _resolve_overlaps_and_align(
+        refined, spec_by_id, badge_w, badge_h, min_safe_y=min_safe_y
+    )
+
+    # Final contrast re-verification at resolved (x_mm, y_mm) coordinates
+    final_elements: list[SuggestedElementPlacement] = []
+    for p in refined:
+        spec = spec_by_id[p.id]
+        if spec.type in ("name", "wca_id", "competition_id"):
+            min_c = 85 if spec.type == "name" else 72
+            reg_lum = _sample_region_luminance(
+                active_lum_grid, badge_w, badge_h, p.x_mm, p.y_mm, p.width_mm, p.height_mm
+            )
+            tgt_lum = (
+                _hex_luminance(p.background_color)
+                if (p.has_background and p.background_color)
+                else reg_lum
+            )
+            txt_c = p.text_color
+            if not txt_c or abs(_hex_luminance(txt_c) - tgt_lum) < min_c:
+                pref = light_fallback if tgt_lum < 128 else dark_fallback
+                if abs(_hex_luminance(pref) - tgt_lum) < min_c:
+                    pref = "#FFFFFF" if tgt_lum < 128 else "#0F172A"
+                p = p.model_copy(update={"text_color": pref})
+        final_elements.append(p)
+
     return suggestion.model_copy(
         update={
             "palette": brand_palette,
             "role_style": role_style,
-            "elements": refined,
+            "elements": final_elements,
         }
     )
 
@@ -871,6 +1442,7 @@ def _build_user_prompt(
     elements: list[LayoutElementSpec],
     luminance_grid: list[list[int]],
     palette_info: dict[str, Any] | None = None,
+    visual_zones: dict[str, Any] | None = None,
     design_note: str | None = None,
     validation_feedback: str | None = None,
 ) -> str:
@@ -880,6 +1452,33 @@ def _build_user_prompt(
     grid_desc = "\n".join(
         f"  row {idx + 1} (top->bottom): {row}" for idx, row in enumerate(luminance_grid)
     )
+    zones_section = ""
+    if visual_zones:
+        cz = visual_zones.get("clean_zones") or []
+        avoids = visual_zones.get("avoid_notes") or []
+        lines: list[str] = []
+        if cz:
+            lines.append(
+                "Computer-Vision detected CLEAN NEGATIVE-SPACE / PLACEHOLDER ZONES "
+                "(low edge energy — strongly prefer placing elements inside these rectangles! "
+                "Zone 1 is also outlined in emerald green on the ruler image):"
+            )
+            for idx_z, z in enumerate(cz, start=1):
+                x2 = round(z["x_mm"] + z["width_mm"], 1)
+                y2 = round(z["y_mm"] + z["height_mm"], 1)
+                surface = "dark surface" if z["avg_lum"] < 128 else "light surface"
+                lines.append(
+                    f"  - Zone {idx_z}: x={z['x_mm']}..{x2} mm, y={z['y_mm']}..{y2} mm "
+                    f"(size {z['width_mm']}x{z['height_mm']} mm, {z['area_pct']}% of badge, "
+                    f"avg_lum={z['avg_lum']} [{surface}])"
+                )
+        if avoids:
+            lines.append("BUSY ARTWORK / LOGO / HEADER BANDS TO AVOID:")
+            for note in avoids:
+                lines.append(f"  - {note}")
+        if lines:
+            zones_section = "\n".join(lines) + "\n\n"
+
     palette_section = ""
     if palette_info:
         dom = ", ".join(palette_info.get("dominant_colors", []))
@@ -896,12 +1495,16 @@ def _build_user_prompt(
             f"Match fonts, text colors, role_style, QR, and avatar border harmoniously to this artwork!\n\n"
         )
 
+    orientation = "PORTRAIT (vertical)" if height_mm > width_mm else "LANDSCAPE (horizontal)"
     prompt = (
         f"Badge physical size: width_mm={width_mm:.1f}, height_mm={height_mm:.1f} "
-        f"(side='{side}').\n"
+        f"[{orientation}] (side='{side}').\n"
+        f"Use the cyan top X-ruler (mm) and yellow left Y-ruler (mm) drawn on the image!\n"
         f"Measured 5x5 background luminance grid (0=black, 255=white):\n{grid_desc}\n\n"
+        f"{zones_section}"
         f"{palette_section}"
-        f"Place and style EVERY one of these {len(elements)} elements using their exact id:\n"
+        f"Place and style EVERY one of these {len(elements)} elements using their exact id "
+        f"(with ZERO overlaps and clean visual alignment):\n"
         f"{elements_desc}\n"
     )
     if design_note and design_note.strip():
@@ -930,7 +1533,13 @@ def _call_gemini_layout(
 
     b64_img = base64.b64encode(jpeg_bytes).decode("ascii")
     candidate_models: list[str] = []
-    for candidate in (model, "gemini-3.1-flash-lite-preview", "gemini-3.1-flash-lite"):
+    for candidate in (
+        model,
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite",
+    ):
         if candidate and candidate not in candidate_models:
             candidate_models.append(candidate)
 
@@ -940,7 +1549,7 @@ def _call_gemini_layout(
         gen_config: dict[str, Any] = {
             "responseMimeType": "application/json",
             "responseSchema": GEMINI_LAYOUT_RESPONSE_SCHEMA,
-            "temperature": 0.25,
+            "temperature": 0.2,
         }
         if "gemini-3" in active_model and "lite" not in active_model:
             gen_config["thinkingConfig"] = {"thinkingLevel": "MINIMAL"}
@@ -1055,7 +1664,7 @@ def _call_bedrock_layout(
                 "tools": [tool_spec],
                 "toolChoice": {"tool": {"name": "suggest_badge_layout"}},
             },
-            inferenceConfig={"maxTokens": 2048, "temperature": 0.25},
+            inferenceConfig={"maxTokens": 2048, "temperature": 0.2},
         )
     except Exception as e:
         raise BadgeLayoutError(f"Bedrock Vision call failed ({model}): {e}") from e
@@ -1082,21 +1691,31 @@ def analyze_badge_layout(
     model: str | None = None,
 ) -> tuple[BadgeLayoutSuggestion, dict[str, int], str]:
     """
-    Analyzes badge artwork with Multimodal Vision AI and returns validated, clamped
+    Analyzes badge artwork with Computer-Vision negative-space detection + Set-of-Mark
+    10 mm ruler overlay + Multimodal Vision AI, returning validated, non-overlapping
     element coordinates, matched typography, and brand-harmonized colors.
     """
     if not elements:
         raise BadgeLayoutError("At least one active badge element is required for auto-layout.")
 
-    jpeg_bytes, _orig_size, luminance_grid = prepare_badge_image(image_base64)
+    jpeg_bytes, _orig_size, luminance_grid = prepare_badge_image(
+        image_base64, width_mm=width_mm, height_mm=height_mm
+    )
     palette_info = extract_image_palette(jpeg_bytes)
+    visual_zones = analyze_visual_zones(jpeg_bytes, width_mm=width_mm, height_mm=height_mm)
+    vision_jpeg_bytes = render_ruler_annotated_image(
+        jpeg_bytes,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        clean_zones=visual_zones.get("clean_zones"),
+    )
 
     requested_model = model or settings.LAYOUT_MODEL or settings.GEMINI_MODEL
     use_bedrock = requested_model.startswith(("amazon.", "anthropic.", "us.")) or (
         not settings.clean_gemini_api_key
     )
     if use_bedrock and requested_model.startswith("gemini-"):
-        requested_model = "amazon.nova-pro-v1:0"
+        requested_model = "us.amazon.nova-pro-v1:0"
 
     total_usage = {"input_tokens": 0, "output_tokens": 0}
     validation_feedback: str | None = None
@@ -1110,18 +1729,25 @@ def analyze_badge_layout(
             elements=elements,
             luminance_grid=luminance_grid,
             palette_info=palette_info,
+            visual_zones=visual_zones,
             design_note=design_note,
             validation_feedback=validation_feedback,
         )
 
         if use_bedrock:
             raw_obj, usage, active_model = _call_bedrock_layout(
-                jpeg_bytes, user_prompt, requested_model
+                vision_jpeg_bytes, user_prompt, requested_model
             )
         else:
-            raw_obj, usage, active_model = _call_gemini_layout(
-                jpeg_bytes, user_prompt, requested_model
-            )
+            try:
+                raw_obj, usage, active_model = _call_gemini_layout(
+                    vision_jpeg_bytes, user_prompt, requested_model
+                )
+            except BadgeLayoutError as gem_err:
+                logger.warning("Gemini Vision failed (%s); falling back to Bedrock Nova Pro", gem_err)
+                raw_obj, usage, active_model = _call_bedrock_layout(
+                    vision_jpeg_bytes, user_prompt, "us.amazon.nova-pro-v1:0"
+                )
 
         total_usage["input_tokens"] += usage.get("input_tokens", 0)
         total_usage["output_tokens"] += usage.get("output_tokens", 0)
@@ -1135,6 +1761,7 @@ def analyze_badge_layout(
                 badge_h=height_mm,
                 luminance_grid=luminance_grid,
                 palette_info=palette_info,
+                visual_zones=visual_zones,
             )
             return refined, total_usage, active_model
         except ValidationError as e:
