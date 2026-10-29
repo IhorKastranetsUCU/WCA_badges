@@ -11,8 +11,9 @@
 ---
 
 ## 1. Commit Link
-👉 **[GitHub Commit 7749f8a](https://github.com/IhorKastranetsUCU/WCA_badges/commit/7749f8a)**  
-*(Feature commit range: [`0925424..7749f8a`](https://github.com/IhorKastranetsUCU/WCA_badges/compare/0925424...7749f8a))*  
+👉 **Multimodal AI Badge Auto-Layout + Brand Typography/Palette Matching:** **[GitHub Commit a864316](https://github.com/IhorKastranetsUCU/WCA_badges/commit/a864316)**  
+👉 **LLM Agenda Parser Base Commit:** **[GitHub Commit 7749f8a](https://github.com/IhorKastranetsUCU/WCA_badges/commit/7749f8a)**  
+*(Full Lab 6 commit range: [`0925424..a864316`](https://github.com/IhorKastranetsUCU/WCA_badges/compare/0925424...a864316))*  
 
 The infrastructure is defined as code in [`infra/ai.yml`](file:///Users/ihor/Studing/ad/infra/ai.yml) and deployed to AWS via CloudFormation:
 
