@@ -139,7 +139,7 @@ Evaluated with both **Amazon Nova Pro** and **Anthropic Claude Haiku 5.5 / Opus 
 ```mermaid
 flowchart TD
     subgraph Client["User Device"]
-        Browser["React Web App\n(Badge Canvas + Agenda Modal)\n[Vite + Tailwind + CloudFront]"]
+        Browser["React Web App\n(Badge Editor & AI Auto-Layout Canvas)\n[Vite + Tailwind + CloudFront]"]
     end
 
     subgraph AWS_Cloud["AWS us-east-1 (Serverless Architecture)"]

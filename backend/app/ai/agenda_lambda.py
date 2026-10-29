@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from datetime import date
 from typing import Any
@@ -124,15 +125,24 @@ def verify_cognito_token(auth_header: str) -> UserContext:
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
-    AWS Lambda handler for Agenda Parsing with public Function URL.
-    Enforces authentication, 10k character limits, JSON logging, and CORS.
+    AWS Lambda handler for Agenda Parsing & Multimodal Badge Layout with public Function URL.
+    Enforces authentication, payload limits, JSON logging, and single-origin CORS.
     """
-    cors_headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
-    }
+    domain_name = (event.get("requestContext") or {}).get("domainName") or ""
+    is_lambda_url = ".lambda-url." in domain_name or bool(
+        os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+    )
+    if is_lambda_url:
+        # AWS Lambda Function URL injects Access-Control-Allow-* headers automatically
+        # from AWS::Lambda::Url Cors config; adding them again causes duplicate headers.
+        cors_headers = {"Content-Type": "application/json"}
+    else:
+        cors_headers = {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+        }
 
     # Handle CORS pre-flight
     http_method = event.get("requestContext", {}).get("http", {}).get("method", "")

@@ -929,12 +929,14 @@ def _call_gemini_layout(
         raise BadgeLayoutError("GEMINI_API_KEY is not configured in environment.")
 
     b64_img = base64.b64encode(jpeg_bytes).decode("ascii")
-    candidate_models = [model]
-    if model != "gemini-3.1-flash-lite":
-        candidate_models.append("gemini-3.1-flash-lite")
+    candidate_models: list[str] = []
+    for candidate in (model, "gemini-3.1-flash-lite-preview", "gemini-3.1-flash-lite"):
+        if candidate and candidate not in candidate_models:
+            candidate_models.append(candidate)
 
     last_err: Exception | None = None
-    for active_model in candidate_models:
+    for idx, active_model in enumerate(candidate_models):
+        next_fallback = candidate_models[idx + 1] if idx + 1 < len(candidate_models) else None
         gen_config: dict[str, Any] = {
             "responseMimeType": "application/json",
             "responseSchema": GEMINI_LAYOUT_RESPONSE_SCHEMA,
@@ -961,7 +963,7 @@ def _call_gemini_layout(
             f"{active_model}:generateContent"
         )
         try:
-            with httpx.Client(timeout=14.0) as client:
+            with httpx.Client(timeout=10.0) as client:
                 resp = client.post(
                     url,
                     json=payload,
@@ -970,12 +972,12 @@ def _call_gemini_layout(
                         "Content-Type": "application/json",
                     },
                 )
-            if resp.status_code in (404, 429, 500, 502, 503, 504) and active_model != candidate_models[-1]:
+            if resp.status_code in (404, 429, 500, 502, 503, 504) and next_fallback is not None:
                 logger.warning(
                     "Gemini model %s returned HTTP %s; falling back to %s",
                     active_model,
                     resp.status_code,
-                    candidate_models[-1],
+                    next_fallback,
                 )
                 last_err = BadgeLayoutError(f"Gemini HTTP {resp.status_code}: {resp.text[:240]}")
                 continue
@@ -1005,12 +1007,12 @@ def _call_gemini_layout(
 
         except (httpx.TimeoutException, httpx.NetworkError) as e:
             last_err = e
-            if active_model != candidate_models[-1]:
+            if next_fallback is not None:
                 logger.warning(
                     "Gemini model %s timed out (%s); falling back to %s",
                     active_model,
                     e,
-                    candidate_models[-1],
+                    next_fallback,
                 )
                 continue
             raise BadgeLayoutError(f"Gemini Vision request timed out: {e}") from e

@@ -12,7 +12,6 @@ import { WcaProfileModal } from "@/components/wca/WcaProfileModal";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { AddCustomAttendeeModal } from "@/components/wca/AddCustomAttendeeModal";
 import { ExportPdfModal } from "@/components/editor/ExportPdfModal";
-import { PasteAgendaModal } from "@/components/agenda/PasteAgendaModal";
 import { parseClientCsv } from "@/utils/csvParser";
 import { exportBadges } from "@/utils/pdfExport";
 import { readFileAndCompress } from "@/utils/imageUtils";
@@ -347,7 +346,6 @@ export const App: React.FC = () => {
   const [authModalTab, setAuthModalTab] = useState<"register" | "login">("register");
   const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
-  const [isAgendaModalOpen, setIsAgendaModalOpen] = useState<boolean>(false);
   const [competitionSchedule, setCompetitionSchedule] = useState<any>(null);
   const [isUploadingAssignments, setIsUploadingAssignments] = useState<boolean>(false);
   const [assignmentStatusMessage, setAssignmentStatusMessage] = useState<string | null>(null);
@@ -1494,12 +1492,25 @@ export const App: React.FC = () => {
           ? getApiUrl("/api/ai/badge-layout")
           : AI_PARSER_URL;
 
-      let res = await fetch(primaryUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
+      let res: Response;
+      try {
+        res = await fetch(primaryUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      } catch (primaryErr: any) {
+        if (primaryErr?.name === "AbortError" || !fallbackUrl || fallbackUrl === primaryUrl) {
+          throw primaryErr;
+        }
+        res = await fetch(fallbackUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      }
 
       if ((res.status === 404 || res.status >= 500) && fallbackUrl && fallbackUrl !== primaryUrl) {
         res = await fetch(fallbackUrl, {
@@ -1960,7 +1971,6 @@ export const App: React.FC = () => {
         isWcaAuthenticating={isWcaAuthenticating}
         onGoogleLogin={() => handleGoogleOAuthLogin()}
         isGoogleAuthenticating={isGoogleAuthenticating}
-        onOpenAgendaModal={() => setIsAgendaModalOpen(true)}
         onOpenRegisterModal={() => {
           setAuthModalTab("register");
           setIsAuthModalOpen(true);
@@ -2162,13 +2172,6 @@ export const App: React.FC = () => {
         competitors={competitors}
         roles={roles}
         scheduleData={competitionSchedule}
-      />
-
-      {/* Lab 6: Paste, Check, Save Agenda Modal */}
-      <PasteAgendaModal
-        isOpen={isAgendaModalOpen}
-        onClose={() => setIsAgendaModalOpen(false)}
-        meetingId="meeting-spry-weekly-sync"
       />
     </div>
   );
