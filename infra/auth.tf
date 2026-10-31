@@ -47,6 +47,10 @@ resource "aws_cognito_identity_provider" "google" {
     name           = "name"
     picture        = "picture"
   }
+
+  lifecycle {
+    ignore_changes = [provider_details, attribute_mapping]
+  }
 }
 
 resource "aws_cognito_user_pool_client" "user_pool_client" {
