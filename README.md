@@ -124,3 +124,37 @@ make test
 # Tear down containers and clean volumes
 make clean
 ```
+
+---
+
+## 7. Cloud Infrastructure as Code (Terraform & HCP Terraform)
+
+The project's serverless application infrastructure is managed via **HashiCorp Terraform (HCL)** and deployed automatically through **HCP Terraform (Terraform Cloud)** using version control (VCS) triggers and dynamic AWS OIDC credentials.
+
+### Infrastructure Division
+| Layer | Tool | Files / Stacks | Description |
+|---|---|---|---|
+| **Auth** | Terraform | `infra/auth.tf` | Amazon Cognito User Pool, v2 Managed Login branding, SPA client, Google IdP |
+| **Reports** | Terraform | `infra/reports.tf` | Private S3 reports bucket, SQS + DLQ, Builder Lambda (VPC), Mailer Lambda (SES), Scheduler |
+| **AI Parser** | Terraform | `infra/ai.tf` | Bedrock Claude / Gemini agenda parser Lambda, Function URL, IAM inference role |
+| **Base Compute & CDN** | CloudFormation | `backend.yml`, `frontend.yml` | Foundational VPC, ECR, API Gateway / Lambda, CloudFront distribution, SPA hosting bucket |
+
+### VCS-Driven CI/CD Workflow
+1. **Pull Requests:** Opening or updating a PR against `main` triggers a speculative `terraform plan` in HCP Terraform. The plan diff is displayed directly on the GitHub PR.
+2. **Review & Merge:** Reviewers inspect the exact diff (`+ add`, `~ update in-place`, `- destroy`).
+3. **Automated Apply:** Merging into `main` triggers the remote `apply` in the `WCA_badges` workspace in HCP Terraform.
+4. **Dynamic OIDC Authentication:** Runs authenticate with AWS via IAM OpenID Connect (`app.terraform.io` -> `arn:aws:iam::297580066889:role/hcp-terraform-ooad-IhorKastranetsUCU`). No static AWS access keys are stored in HCP Terraform.
+
+### Secrets Management
+- Sensitive variables (`gemini_api_key`, `google_client_secret`) are stored exclusively in the HCP Terraform Workspace as **Sensitive Variables**.
+- Non-sensitive defaults live in `infra/variables.tf` and `infra/terraform.tfvars`.
+- Secrets are **never** committed to version control.
+
+### CLI Inspection
+```bash
+# Preview infrastructure changes locally via HCP Terraform
+make infra-plan
+
+# Dispatch an on-demand weekly report via SQS queue URL retrieved from Terraform output
+make report-now WEEK=2026-W40
+```

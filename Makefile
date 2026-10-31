@@ -34,17 +34,17 @@ LAMBDA_FUNCTION_NAME ?= wca-badges-api
 LAMBDA_FUNCTION_NAME := $(strip $(subst ",,$(LAMBDA_FUNCTION_NAME)))
 
 .PHONY: help dev up down clean lint lint-backend lint-frontend test test-backend test-frontend \
-        aws-deploy-auth aws-deploy-frontend aws-deploy-backend aws-deploy-all
+        aws-deploy-auth aws-deploy-frontend aws-deploy-backend aws-deploy-all infra-plan
 
 help:
 	@echo "Available commands:"
 	@echo "  make dev                 - Start all services with local docker compose"
 	@echo "  make lint                - Run both backend (ruff) and frontend (eslint/prettier) linters"
 	@echo "  make test                - Run backend and frontend test suites"
-	@echo "  make aws-deploy-auth     - Deploy/update Cognito User Pool and Hosted UI (auth.yml)"
+	@echo "  make infra-plan          - Run Terraform speculative plan via HCP Terraform"
 	@echo "  make aws-deploy-backend  - Build Lambda container image, push to ECR, update function"
 	@echo "  make aws-deploy-frontend - Build Vite bundle, sync to S3, invalidate CloudFront"
-	@echo "  make aws-deploy-all      - Deploy backend, auth, and frontend in correct dependency order"
+	@echo "  make aws-deploy-all      - Deploy backend and frontend (Auth/Reports/AI managed by HCP Terraform)"
 
 dev:
 	docker compose up --build
@@ -75,22 +75,16 @@ test-frontend:
 	cd frontend && npm test --if-present
 
 # ------------------------------------------------------------------------------
-# Serverless AWS Deployment Contracts (Lab 3: Stage 2 Architecture)
+# Serverless AWS Infrastructure (Terraform & HCP Terraform CI/CD)
 # ------------------------------------------------------------------------------
 
+infra-plan:
+	@echo "==> Running Terraform speculative plan via HCP Terraform..."
+	@cd infra && terraform plan
+
 aws-deploy-auth:
-	@echo "==> Deploying Amazon Cognito Auth Stack (infra/auth.yml)..."
-	aws cloudformation deploy \
-	  --template-file infra/auth.yml \
-	  --stack-name $(PROJECT_NAME)-auth \
-	  --parameter-overrides \
-	    ProjectName=$(PROJECT_NAME) \
-	    CognitoDomainPrefix=$(COGNITO_DOMAIN_PREFIX) \
-	    GoogleClientId="$(GOOGLE_CLIENT_ID)" \
-	    GoogleClientSecret="$(GOOGLE_CLIENT_SECRET)" \
-	    FrontendUrl=https://$(CLOUDFRONT_DOMAIN) \
-	    LocalhostPort=5173 \
-	  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+	@echo "Notice: Auth infrastructure is now managed by Terraform via HCP Terraform CI/CD."
+	@echo "Run 'make infra-plan' to preview changes, or commit & push to GitHub to apply."
 
 aws-deploy-backend:
 	@echo "==> Logging into Amazon ECR..."
@@ -115,24 +109,15 @@ deploy-frontend: aws-deploy-frontend
 deploy-backend: aws-deploy-backend
 
 aws-deploy-reports:
-	@echo "==> Deploying Reports Event-Driven Stack (infra/reports.yml)..."
-	aws cloudformation deploy \
-	  --template-file infra/reports.yml \
-	  --stack-name $(PROJECT_NAME)-reports \
-	  --parameter-overrides \
-	    ProjectName=$(PROJECT_NAME) \
-	    ImageUri=$(ECR_REPO_URL):latest \
-	    SenderEmail="$(if $(SENDER_EMAIL),$(SENDER_EMAIL),kastranets.pn@ucu.edu.ua)" \
-	    RecipientEmail="$(if $(RECIPIENT_EMAIL),$(RECIPIENT_EMAIL),kastranets.pn@ucu.edu.ua)" \
-	  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-	  --region $(AWS_REGION)
+	@echo "Notice: Reports infrastructure is now managed by Terraform via HCP Terraform CI/CD."
+	@echo "Run 'make infra-plan' to preview changes, or commit & push to GitHub to apply."
 
 report-now:
 	@if [ -z "$(WEEK)" ]; then \
 		echo "Usage: make report-now WEEK=2026-W40"; \
 		exit 1; \
 	fi
-	@QUEUE_URL=$$(aws cloudformation describe-stacks --stack-name $(PROJECT_NAME)-reports --query "Stacks[0].Outputs[?OutputKey=='ReportRequestsQueueUrl'].OutputValue" --output text --region $(AWS_REGION)); \
+	@QUEUE_URL=$$(cd infra && terraform output -raw ReportRequestsQueueUrl 2>/dev/null || aws cloudformation describe-stacks --stack-name $(PROJECT_NAME)-reports --query "Stacks[0].Outputs[?OutputKey=='ReportRequestsQueueUrl'].OutputValue" --output text --region $(AWS_REGION)); \
 	echo "==> Sending report request for WEEK=$(WEEK) to $$QUEUE_URL..."; \
 	aws sqs send-message \
 	  --queue-url $$QUEUE_URL \
@@ -161,24 +146,8 @@ layout-test:
 	@PYTHONPATH=backend python3 -m app.ai.layout_cli "$(IMAGE)" 2>/dev/null || PYTHONPATH=backend backend/.venv/bin/python -m app.ai.layout_cli "$(IMAGE)"
 
 aws-deploy-ai:
-	@echo "==> Deploying AI Stack (infra/ai.yml)..."
-	@aws cloudformation deploy \
-	  --template-file infra/ai.yml \
-	  --stack-name $(PROJECT_NAME)-ai \
-	  --parameter-overrides \
-	    ProjectName=$(PROJECT_NAME) \
-	    ImageUri=$(ECR_REPO_URL):latest \
-	    ParserModel="$(if $(PARSER_MODEL),$(PARSER_MODEL),anthropic.claude-opus-5-5)" \
-	    LayoutModel="$(GEMINI_MODEL)" \
-	    GeminiApiKey="$(GEMINI_API_KEY)" \
-	    CognitoUserPoolId="$(if $(COGNITO_USER_POOL_ID),$(COGNITO_USER_POOL_ID),us-east-1_T7FaZwE2p)" \
-	    FrontendUrl=https://$(CLOUDFRONT_DOMAIN) \
-	  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-	  --region $(AWS_REGION)
-	@echo "==> Refreshing AI Lambda container image digest..."
-	@aws lambda update-function-code --function-name $(PROJECT_NAME)-agenda-parser --image-uri $(ECR_REPO_URL):latest --region $(AWS_REGION) >/dev/null
-	@aws lambda wait function-updated --function-name $(PROJECT_NAME)-agenda-parser --region $(AWS_REGION)
-	@echo "==> AI Lambda ($(PROJECT_NAME)-agenda-parser) is updated and live!"
+	@echo "Notice: AI infrastructure is now managed by Terraform via HCP Terraform CI/CD."
+	@echo "Run 'make infra-plan' to preview changes, or commit & push to GitHub to apply."
 
-aws-deploy-all: aws-deploy-backend aws-deploy-auth aws-deploy-frontend aws-deploy-reports aws-deploy-ai
-	@echo "==> Full serverless deployment complete (including AI parser)!"
+aws-deploy-all: aws-deploy-backend aws-deploy-frontend
+	@echo "==> Base backend & frontend deployed. Auth, Reports, and AI are managed by Terraform via HCP Terraform CI/CD."

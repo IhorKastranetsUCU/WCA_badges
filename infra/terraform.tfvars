@@ -1,0 +1,14 @@
+project_name          = "wca-badges"
+region                = "us-east-1"
+account_id            = "297580066889"
+cognito_domain_prefix = "wca-badges-297580066889"
+google_client_id      = "794609556919-iq3gif75o82363prudfbiqlj44j09slj.apps.googleusercontent.com"
+frontend_url          = "https://d3genjzo563rwc.cloudfront.net"
+localhost_port        = 5173
+sender_email          = "kastranets.pn@ucu.edu.ua"
+recipient_email       = "kastranets.pn@ucu.edu.ua"
+vpc_id                = "vpc-0505d891aeb907a09"
+route_table_id        = "rtb-0f6c8a00be5ec6ea6"
+subnet_ids            = ["subnet-0897a06b2403b2f3a", "subnet-0a8786bfa162ecd38"]
+parser_model          = "anthropic.claude-opus-5-5"
+layout_model          = "gemini-3.5-flash"
