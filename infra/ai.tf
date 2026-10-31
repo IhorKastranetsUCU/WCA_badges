@@ -14,30 +14,33 @@ resource "aws_iam_role" "agenda_parser_role" {
     }]
   })
 
-  managed_policy_arns = [
-    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  ]
-
-  inline_policy {
-    name = "BedrockInferencePolicy"
-    policy = jsonencode({
-      Version = "2012-10-17"
-      Statement = [{
-        Effect = "Allow"
-        Action = [
-          "bedrock-mantle:CreateInference",
-          "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream",
-          "bedrock-runtime:Converse"
-        ]
-        Resource = "*"
-      }]
-    })
-  }
-
   tags = {
     PROJECT_NAME = var.project_name
   }
+}
+
+resource "aws_iam_role_policy_attachment" "agenda_parser_basic" {
+  role       = aws_iam_role.agenda_parser_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "agenda_parser_bedrock" {
+  name = "BedrockInferencePolicy"
+  role = aws_iam_role.agenda_parser_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "bedrock-mantle:CreateInference",
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock-runtime:Converse"
+      ]
+      Resource = "*"
+    }]
+  })
 }
 
 # ==============================================================================

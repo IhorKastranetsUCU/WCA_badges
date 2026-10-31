@@ -120,40 +120,47 @@ resource "aws_iam_role" "builder_execution_role" {
     }]
   })
 
-  managed_policy_arns = [
-    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-  ]
-
-  inline_policy {
-    name = "S3AndSqsAccess"
-    policy = jsonencode({
-      Version = "2012-10-17"
-      Statement = [
-        {
-          Effect = "Allow"
-          Action = [
-            "s3:PutObject",
-            "s3:GetObject"
-          ]
-          Resource = "arn:aws:s3:::${var.project_name}-reports-${var.account_id}/*"
-        },
-        {
-          Effect = "Allow"
-          Action = [
-            "sqs:ReceiveMessage",
-            "sqs:DeleteMessage",
-            "sqs:GetQueueAttributes"
-          ]
-          Resource = aws_sqs_queue.report_requests_queue.arn
-        }
-      ]
-    })
-  }
-
   tags = {
     PROJECT_NAME = var.project_name
   }
+}
+
+resource "aws_iam_role_policy_attachment" "builder_basic" {
+  role       = aws_iam_role.builder_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "builder_vpc" {
+  role       = aws_iam_role.builder_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+resource "aws_iam_role_policy" "builder_s3_sqs" {
+  name = "S3AndSqsAccess"
+  role = aws_iam_role.builder_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = "arn:aws:s3:::${var.project_name}-reports-${var.account_id}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = aws_sqs_queue.report_requests_queue.arn
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role" "mailer_execution_role" {
@@ -168,32 +175,35 @@ resource "aws_iam_role" "mailer_execution_role" {
     }]
   })
 
-  managed_policy_arns = [
-    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  ]
-
-  inline_policy {
-    name = "MailerPermissions"
-    policy = jsonencode({
-      Version = "2012-10-17"
-      Statement = [
-        {
-          Effect   = "Allow"
-          Action   = ["s3:GetObject"]
-          Resource = "arn:aws:s3:::${var.project_name}-reports-${var.account_id}/reports/*"
-        },
-        {
-          Effect   = "Allow"
-          Action   = ["ses:SendEmail", "ses:SendRawEmail"]
-          Resource = "*"
-        }
-      ]
-    })
-  }
-
   tags = {
     PROJECT_NAME = var.project_name
   }
+}
+
+resource "aws_iam_role_policy_attachment" "mailer_basic" {
+  role       = aws_iam_role.mailer_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "mailer_permissions" {
+  name = "MailerPermissions"
+  role = aws_iam_role.mailer_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "arn:aws:s3:::${var.project_name}-reports-${var.account_id}/reports/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role" "scheduler_role" {
@@ -208,21 +218,23 @@ resource "aws_iam_role" "scheduler_role" {
     }]
   })
 
-  inline_policy {
-    name = "SqsSendMessage"
-    policy = jsonencode({
-      Version = "2012-10-17"
-      Statement = [{
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
-        Resource = aws_sqs_queue.report_requests_queue.arn
-      }]
-    })
-  }
-
   tags = {
     PROJECT_NAME = var.project_name
   }
+}
+
+resource "aws_iam_role_policy" "scheduler_sqs" {
+  name = "SqsSendMessage"
+  role = aws_iam_role.scheduler_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = aws_sqs_queue.report_requests_queue.arn
+    }]
+  })
 }
 
 # ==============================================================================
