@@ -23,6 +23,7 @@ from app.ai.badge_layout import (
     layout_cost_usd,
     prepare_badge_image,
 )
+from app.core.config import settings
 from app.main import app
 from app.services.pdf_generator import get_pdf_font
 
@@ -144,6 +145,7 @@ def test_layout_cost_calculation():
     assert cost == 0.00042
 
 
+@patch.object(settings, "GEMINI_API_KEY", "test-gemini-key")
 @patch("app.ai.badge_layout._call_gemini_layout")
 def test_analyze_badge_layout_with_mock_gemini(mock_gemini):
     mock_gemini.return_value = (
@@ -182,6 +184,7 @@ def test_analyze_badge_layout_with_mock_gemini(mock_gemini):
     assert suggestion.elements[0].id == "elem-name"
 
 
+@patch.object(settings, "GEMINI_API_KEY", "test-gemini-key")
 @patch("app.ai.badge_layout._call_gemini_layout")
 def test_lambda_handler_badge_layout_route(mock_gemini):
     mock_gemini.return_value = (
@@ -224,6 +227,7 @@ def test_lambda_handler_badge_layout_route(mock_gemini):
 
 
 @pytest.mark.asyncio
+@patch.object(settings, "GEMINI_API_KEY", "test-gemini-key")
 @patch("app.ai.badge_layout._call_gemini_layout")
 async def test_fastapi_badge_layout_and_template_save(mock_gemini):
     mock_gemini.return_value = (
