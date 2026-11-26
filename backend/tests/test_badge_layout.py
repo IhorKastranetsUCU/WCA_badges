@@ -27,9 +27,7 @@ from app.main import app
 from app.services.pdf_generator import get_pdf_font
 
 
-def _make_sample_badge_data_url(
-    top_color: str = "#0F172A", body_color: str = "#FFFFFF"
-) -> str:
+def _make_sample_badge_data_url(top_color: str = "#0F172A", body_color: str = "#FFFFFF") -> str:
     img = Image.new("RGB", (600, 420), body_color)
     draw = ImageDraw.Draw(img)
     draw.rectangle([0, 0, 600, 110], fill=top_color)

@@ -1,11 +1,10 @@
 import logging
-import uuid
+
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import HTTPException, status
 
 from app.core.config import settings
-from app.schemas.wca import WCAProfile
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +147,9 @@ def resend_cognito_code(email: str) -> dict:
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
         error_msg = e.response["Error"]["Message"]
-        logger.warning("Cognito resend_confirmation_code error: code=%s, msg=%s", error_code, error_msg)
+        logger.warning(
+            "Cognito resend_confirmation_code error: code=%s, msg=%s", error_code, error_msg
+        )
 
         if error_code == "UserNotFoundException":
             raise HTTPException(

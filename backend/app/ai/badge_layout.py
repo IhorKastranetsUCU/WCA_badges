@@ -456,9 +456,7 @@ def extract_image_palette(jpeg_bytes: bytes) -> dict[str, Any]:
     dominant_colors = [s["hex"] for s in swatches[:6]]
 
     # Rank chromatic brand accents by saturation weighted by square-root area
-    chromatic = [
-        s for s in swatches if s["hsv"][1] >= 0.20 and 16 <= s["lum"] <= 242
-    ]
+    chromatic = [s for s in swatches if s["hsv"][1] >= 0.20 and 16 <= s["lum"] <= 242]
     chromatic.sort(
         key=lambda s: s["hsv"][1] * (s["count"] ** 0.35),
         reverse=True,
@@ -651,12 +649,8 @@ def _largest_clean_rectangles(
         h_mm = round(((r1 - r0) / rows) * height_mm, 1)
         area_pct = round((best_area / float(rows * cols)) * 100.0, 1)
 
-        lum_vals = [
-            fine_lum_grid[rr][cc] for rr in range(r0, r1) for cc in range(c0, c1)
-        ]
-        busy_vals = [
-            busyness_grid[rr][cc] for rr in range(r0, r1) for cc in range(c0, c1)
-        ]
+        lum_vals = [fine_lum_grid[rr][cc] for rr in range(r0, r1) for cc in range(c0, c1)]
+        busy_vals = [busyness_grid[rr][cc] for rr in range(r0, r1) for cc in range(c0, c1)]
         avg_lum = int(round(sum(lum_vals) / max(1, len(lum_vals))))
         avg_busy = int(round(sum(busy_vals) / max(1, len(busy_vals))))
 
@@ -1016,7 +1010,9 @@ def _pack_elements_in_clean_zone(
         sized = [
             (
                 p,
-                w if spec_by_id[p.id].type not in ("avatar", "flag") else round(max(10.0, w * scale), 1),
+                w
+                if spec_by_id[p.id].type not in ("avatar", "flag")
+                else round(max(10.0, w * scale), 1),
                 round(max(5.5, h * scale), 1),
             )
             for p, w, h in sized
@@ -1041,11 +1037,7 @@ def _pack_elements_in_clean_zone(
 
     for idx_q, qp in enumerate(qr_items):
         qs = round(min(20.0, max(15.0, min(zw, zh) * 0.28)), 1)
-        qx = (
-            round(max(margin, zx + zw - qs), 1)
-            if idx_q % 2 == 0
-            else round(max(margin, zx), 1)
-        )
+        qx = round(max(margin, zx + zw - qs), 1) if idx_q % 2 == 0 else round(max(margin, zx), 1)
         qy = round(max(margin, zy + zh - qs), 1)
         updated[qp.id] = qp.model_copy(
             update={"x_mm": qx, "y_mm": qy, "width_mm": qs, "height_mm": qs}
@@ -1097,7 +1089,13 @@ def _resolve_overlaps_and_align(
             cx_i = boxes[i].x_mm + boxes[i].width_mm / 2.0
             if abs(cx_i - median_cx) <= badge_w * 0.10:
                 new_x = round(
-                    max(margin, min(badge_w - margin - boxes[i].width_mm, median_cx - boxes[i].width_mm / 2.0)),
+                    max(
+                        margin,
+                        min(
+                            badge_w - margin - boxes[i].width_mm,
+                            median_cx - boxes[i].width_mm / 2.0,
+                        ),
+                    ),
                     1,
                 )
                 boxes[i] = boxes[i].model_copy(update={"x_mm": new_x})
@@ -1178,7 +1176,9 @@ def _refine_and_clamp_suggestion(
     accent_fallback = (palette_info or {}).get("primary_accent", "#2563EB")
     sampled_swatches: list[str] = []
     if palette_info:
-        for hex_c in palette_info.get("accent_colors", []) + palette_info.get("dominant_colors", []):
+        for hex_c in palette_info.get("accent_colors", []) + palette_info.get(
+            "dominant_colors", []
+        ):
             up = hex_c.upper()
             if up not in sampled_swatches:
                 sampled_swatches.append(up)
@@ -1396,9 +1396,7 @@ def _refine_and_clamp_suggestion(
             and float(top_zone["area_pct"]) >= 18.0
             and int(top_zone["avg_busyness"]) <= 19
         ):
-            refined = _pack_elements_in_clean_zone(
-                refined, spec_by_id, top_zone, badge_w, badge_h
-            )
+            refined = _pack_elements_in_clean_zone(refined, spec_by_id, top_zone, badge_w, badge_h)
 
     refined = _resolve_overlaps_and_align(
         refined, spec_by_id, badge_w, badge_h, min_safe_y=min_safe_y
@@ -1612,7 +1610,11 @@ def _call_gemini_layout(
                 meta.get("thoughtsTokenCount", 0)
             )
             parsed = json.loads(text_part)
-            return parsed, {"input_tokens": input_tokens, "output_tokens": output_tokens}, active_model
+            return (
+                parsed,
+                {"input_tokens": input_tokens, "output_tokens": output_tokens},
+                active_model,
+            )
 
         except (httpx.TimeoutException, httpx.NetworkError) as e:
             last_err = e
@@ -1744,7 +1746,9 @@ def analyze_badge_layout(
                     vision_jpeg_bytes, user_prompt, requested_model
                 )
             except BadgeLayoutError as gem_err:
-                logger.warning("Gemini Vision failed (%s); falling back to Bedrock Nova Pro", gem_err)
+                logger.warning(
+                    "Gemini Vision failed (%s); falling back to Bedrock Nova Pro", gem_err
+                )
                 raw_obj, usage, active_model = _call_bedrock_layout(
                     vision_jpeg_bytes, user_prompt, "us.amazon.nova-pro-v1:0"
                 )

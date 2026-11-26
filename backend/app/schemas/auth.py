@@ -1,4 +1,5 @@
 import re
+
 from pydantic import BaseModel, Field, field_validator
 
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -20,7 +21,9 @@ class UserRegisterRequest(BaseModel):
 
 class UserConfirmRequest(BaseModel):
     email: str = Field(..., description="User email to confirm")
-    code: str = Field(..., min_length=4, max_length=16, description="Verification confirmation code")
+    code: str = Field(
+        ..., min_length=4, max_length=16, description="Verification confirmation code"
+    )
 
     @field_validator("email")
     @classmethod

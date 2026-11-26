@@ -137,7 +137,13 @@ def get_pdf_font(
     is_ascii_latin = all(ord(ch) <= 255 for ch in (text_sample or ""))
 
     # Built-in Type1 Serif mapping (Playfair Display / Georgia) when text is Latin-1 compatible
-    if is_ascii_latin and fam in ("playfair display", "georgia", "serif", "times", "times new roman"):
+    if is_ascii_latin and fam in (
+        "playfair display",
+        "georgia",
+        "serif",
+        "times",
+        "times new roman",
+    ):
         if is_bold and is_italic:
             return "Times-BoldItalic"
         if is_bold:
@@ -163,7 +169,8 @@ def get_pdf_font(
     if "Inter" in reg_fonts and (
         not fam
         or "inter" in fam
-        or fam in (
+        or fam
+        in (
             "sans-serif",
             "system-ui",
             "arial",
