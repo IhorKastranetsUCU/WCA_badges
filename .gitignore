@@ -49,6 +49,10 @@ backend/app/services/google_wca_links.json
 .DS_Store
 Thumbs.db
 
+# Midterm
+midterm2/
+midterm2
+
 # Terraform
 **/.terraform/
 *.tfstate

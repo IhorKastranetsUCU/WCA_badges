@@ -1,0 +1,11 @@
+project_id           = "spry-kastranets-2026"
+region               = "us-central1"
+project_name         = "wca-badges"
+db_tier              = "db-f1-micro"
+db_disk_size_gb      = 10
+db_activation_policy = "ALWAYS"
+db_name              = "spry_badges"
+db_user              = "spry_user"
+api_image            = "us-central1-docker.pkg.dev/spry-kastranets-2026/wca-badges-repo/wca-badges-backend:latest"
+cors_origins         = "https://spry-kastranets-2026.web.app,https://spry-kastranets-2026.firebaseapp.com,http://localhost:5173"
+enable_wif           = false

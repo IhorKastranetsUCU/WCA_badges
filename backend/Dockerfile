@@ -24,8 +24,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy backend source code
 COPY . .
 
-# Expose FastAPI port
-EXPOSE 8000
+# Cloud Run injects PORT (default 8080); listen on 0.0.0.0:$PORT without Lambda adapter
+ENV PORT=8080
+EXPOSE 8080
 
-# Default entrypoint for container execution
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default entrypoint for Cloud Run & local container execution
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

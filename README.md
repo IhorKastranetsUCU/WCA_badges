@@ -158,3 +158,58 @@ make infra-plan
 # Dispatch an on-demand weekly report via SQS queue URL retrieved from Terraform output
 make report-now WEEK=2026-W40
 ```
+
+
+---
+
+## 8. Multi-Cloud Deployment on Google Cloud (`gcp/`)
+
+The core of Spry (static frontend, FastAPI container API, and PostgreSQL database) can also be deployed to Google Cloud using the isolated Terraform configuration in [`gcp/`](gcp/), while keeping Cognito Auth, Weekly Reports (SES/SQS/EventBridge), and the Bedrock AI Agenda Parser on AWS.
+
+### Architecture Summary
+- **Frontend:** Firebase Hosting ([`firebase.json`](firebase.json)) serving `frontend/dist` with `/api/**` rewritten to Cloud Run (`wca-badges-api`) for single-origin routing without CORS.
+- **API:** Cloud Run v2 (`wca-badges-api`, `min_instance_count = 0`) running [`backend/Dockerfile`](backend/Dockerfile) directly on `$PORT` (`8080`) without the AWS Lambda/Mangum adapter.
+- **Database:** Cloud SQL for PostgreSQL 16 (`db-f1-micro`, 10 GB SSD, `us-central1`) with the generated password stored in Google Cloud Secret Manager (`wca-badges-db-password`).
+- **Identity:** Dedicated least-privilege runtime service account (`spry-api-runtime`) and CI/CD service account (`spry-terraform-ci`) with keyless Workload Identity Federation—no long-lived JSON keys.
+
+### Deploy to GCP
+1. Authenticate locally with Application Default Credentials (`gcloud auth application-default login`) or configure Workload Identity Federation in [`gcp/iam.tf`](gcp/iam.tf).
+2. Build and push the Cloud Run container (without the Lambda adapter):
+   ```bash
+   docker build -f backend/Dockerfile -t us-central1-docker.pkg.dev/<PROJECT_ID>/wca-badges-repo/wca-badges-backend:latest ./backend
+   docker push us-central1-docker.pkg.dev/<PROJECT_ID>/wca-badges-repo/wca-badges-backend:latest
+   ```
+3. Provision GCP resources from `gcp/` (separate state from AWS `infra/`):
+   ```bash
+   cd gcp && terraform init && terraform apply -var="project_id=<PROJECT_ID>"
+   ```
+4. Build the frontend and deploy to Firebase Hosting:
+   ```bash
+   cd frontend && VITE_API_BASE_URL="" npm run build && cd ..
+   firebase deploy --only hosting --project <PROJECT_ID>
+   ```
+
+### What Still Runs on AWS
+- **Authentication:** Amazon Cognito User Pool + Google IdP (`infra/auth.tf`)
+- **Weekly Reports:** EventBridge Scheduler, SQS + DLQ, S3 bucket, Builder/Mailer Lambdas, and Amazon SES (`infra/reports.tf`)
+- **AI Agenda Parser:** Bedrock Claude / Gemini Lambda Function URL (`infra/ai.tf`)
+
+### Stop or Destroy the Cloud SQL Database (Cost Control)
+Unlike Aurora Serverless v2, Cloud SQL (`db-f1-micro`) does **not** auto-pause and bills `$0.0105/hr` (~`$7.67/month`) while running. Stop it between demos or destroy the stack when finished:
+```bash
+# Stop compute billing (storage $1.70/mo continues until deleted)
+gcloud sql instances patch wca-badges-pg --activation-policy=NEVER --project=<PROJECT_ID>
+# Or via Terraform:
+cd gcp && terraform apply -var="project_id=<PROJECT_ID>" -var="db_activation_policy=NEVER"
+
+# Delete everything created by Lab 9
+cd gcp && terraform destroy -var="project_id=<PROJECT_ID>"
+```
+
+### Run the Cloud Run Container Locally (No GCP Account)
+```bash
+docker build -f backend/Dockerfile -t spry-cloudrun-api ./backend
+docker run --rm -e PORT=8080 -p 8080:8080 \
+  -e DATABASE_URL="postgresql+asyncpg://spry_user:spry_password@host.docker.internal:5432/spry_badges" \
+  spry-cloudrun-api
+```

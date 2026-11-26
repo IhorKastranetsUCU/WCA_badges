@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     def effective_database_url(self) -> str:
         if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
             return "sqlite+aiosqlite:////tmp/badges.db"
+        cloud_sql_conn = os.environ.get("CLOUD_SQL_CONNECTION_NAME")
+        db_password = os.environ.get("DB_PASSWORD")
+        if cloud_sql_conn and db_password:
+            db_user = os.environ.get("DB_USER", "spry_user")
+            db_name = os.environ.get("DB_NAME", "spry_badges")
+            return f"postgresql+asyncpg://{db_user}:{db_password}@/{db_name}?host=/cloudsql/{cloud_sql_conn}"
         return self.DATABASE_URL
 
     model_config = SettingsConfigDict(
